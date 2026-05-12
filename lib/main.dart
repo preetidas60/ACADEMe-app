@@ -1,10 +1,12 @@
+import 'package:ACADEMe/introduction_page.dart';
+import 'package:ACADEMe/utils/bottomNav.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'dart:io';
-import 'home/pages/home_view.dart';
-import 'started/pages/auth_wrapper.dart';
+import 'home/pages/my_courses.dart';
+import 'home/auth/auth_wrapper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import './started/pages/auth_service.dart';
+import './home/auth/auth_service.dart';
 import 'academe_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,7 +39,7 @@ class MyApp extends StatelessWidget {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness:
-          !kIsWeb && Platform.isAndroid ? Brightness.dark : Brightness.light,
+      !kIsWeb && Platform.isAndroid ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: Colors.white,
       systemNavigationBarDividerColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
@@ -52,7 +54,7 @@ class MyApp extends StatelessWidget {
       ),
       home: AuthWrapper(),
       routes: {
-        '/home': (context) => HomeScreen(),
+        '/home': (context) => BottomNav(),
       },
     );
   }
