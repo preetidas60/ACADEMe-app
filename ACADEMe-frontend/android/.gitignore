@@ -1,0 +1,38 @@
+# Flutter/Dart-specific
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+android/app/debug.keystore
+assets/.env
+
+# Gradle-specific
+/.gradle/
+**/build/
+gradle-wrapper.jar
+gradlew
+gradlew.bat
+local.properties
+GeneratedPluginRegistrant.java
+
+# IntelliJ/Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+
+# Log files
+*.log
+
+# Keystore files (Security)
+key.properties
+**/*.keystore
+**/*.jks
+
+# Capture files (Screenshots, recordings)
+captures/
