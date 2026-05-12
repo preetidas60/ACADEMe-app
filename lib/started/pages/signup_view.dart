@@ -19,6 +19,7 @@ class _SignUpViewState extends State<SignUpView> {
   bool _agreeToTerms = false;
   bool _isLoading = false;
   bool _isPasswordVisible = false;
+  bool _isGoogleLoading = false;
 
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate() && _agreeToTerms) {
@@ -45,6 +46,25 @@ class _SignUpViewState extends State<SignUpView> {
     } else if (!_agreeToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('You must agree to terms and conditions')),
+      );
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isGoogleLoading = true);
+
+    final (user, errorMessage) = await AuthService().signInWithGoogle();
+
+    setState(() => _isGoogleLoading = false);
+
+    if (user != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Signed in with Google successfully!')),
+      );
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage ?? 'Google Sign-In failed. Please try again')),
       );
     }
   }
@@ -126,8 +146,8 @@ class _SignUpViewState extends State<SignUpView> {
                     height: 50,
                   ),
                   Container(
-                    height: MediaQuery.of(context).size.height * 0.6,
-                    margin: EdgeInsets.symmetric(horizontal: 30),
+                    height: MediaQuery.of(context).size.height * 0.75,
+                    margin: EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                         color: AcademeTheme.white,
                         boxShadow: [
@@ -293,6 +313,28 @@ class _SignUpViewState extends State<SignUpView> {
                             ),
                           ),
                         ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 30),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _isGoogleLoading ? null : _signInWithGoogle,
+                              icon: _isGoogleLoading
+                                  ? CircularProgressIndicator(color: Colors.white)
+                                  : Image.asset('assets/icons/google_icon.png', height: 24),
+                              label: Text('Sign in with Google'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Colors.black,
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 16), // Adds spacing before the "Sign Up" button
                       ],
                     ),
                   ),
