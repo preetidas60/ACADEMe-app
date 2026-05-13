@@ -13,6 +13,12 @@ import 'package:ACADEMe/widget/chat_history_drawer.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:open_file/open_file.dart';
+import 'package:ACADEMe/widget/video_player.dart';
+import 'package:ACADEMe/widget/audio_payer_widget.dart';
+import 'package:ACADEMe/widget/full_screen_video.dart';
+import 'package:ACADEMe/widget/video_thumbnail.dart';
+import 'package:ACADEMe/widget/typing_indicator.dart';
 
 class ASKMe extends StatefulWidget {
   @override
@@ -22,7 +28,8 @@ class ASKMe extends StatefulWidget {
 class _ASKMeState extends State<ASKMe> {
   final ScrollController _scrollController = ScrollController();
   String selectedLanguage = "en"; // Default: English
-  List<Map<String, String>> chatMessages = [];
+  List<Map<String, dynamic>> chatMessages = [];
+
   final TextEditingController _textController = TextEditingController();
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
@@ -131,7 +138,6 @@ class _ASKMeState extends State<ASKMe> {
   }
 
   Future<void> _pickFile(String fileType) async {
-    // This is unchanged
     FileType type;
     List<String>? allowedExtensions;
 
@@ -150,16 +156,17 @@ class _ASKMeState extends State<ASKMe> {
         type = FileType.audio;
         break;
       default:
+        print("❌ Invalid file type.");
         return;
     }
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
-      //This is unchanged
       type: type,
-      allowedExtensions: allowedExtensions,
+      allowedExtensions:
+          (type == FileType.custom) ? allowedExtensions : null, // ✅ Fix
     );
 
-    if (result != null) {
+    if (result != null && result.files.single.path != null) {
       File file = File(result.files.single.path!);
       _showPromptDialog(file, fileType);
     } else {
@@ -169,20 +176,20 @@ class _ASKMeState extends State<ASKMe> {
 
   Future<void> _uploadFile(File file, String fileType,
       [String prompt = '']) async {
-    //ASKMe backend URL
     var url = Uri.parse(
         '${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/process_${fileType.toLowerCase()}');
 
     var request = http.MultipartRequest('POST', url);
     request.fields.addAll({
-      'prompt': prompt.isNotEmpty ? prompt : 'Describe this image',
+      'prompt': prompt.isNotEmpty ? prompt : 'Describe this file',
       'source_lang': 'auto',
       'target_lang': selectedLanguage,
     });
 
     String fileFieldName = (fileType == 'Image') ? 'image' : 'file';
     String? mimeType = lookupMimeType(file.path);
-    mimeType ??= (fileType == 'Video') ? 'video/mp4' : 'application/octet-stream';
+    mimeType ??=
+        (fileType == 'Video') ? 'video/mp4' : 'application/octet-stream';
 
     request.files.add(await http.MultipartFile.fromPath(
       fileFieldName,
@@ -190,41 +197,59 @@ class _ASKMeState extends State<ASKMe> {
       contentType: MediaType.parse(mimeType),
     ));
 
-    var response = await request.send();
-    String responseBody = await response.stream.bytesToString();
+    // Add user message to chat
+    setState(() {
+      chatMessages.add({
+        "role": "user",
+        "text": prompt.isNotEmpty ? prompt : "Uploaded $fileType",
+        "fileInfo": file.path,
+        "fileType": fileType,
+        "status": prompt.isNotEmpty ? prompt : "Processing..."
+      });
 
-    if (response.statusCode == 200) {
-      try {
+      // Add a "typing indicator" for the AI response
+      chatMessages.add({
+        "role": "assistant",
+        "text": "typing...",
+        "isTyping": true, // ✅ Used to identify typing indicator
+      });
+    });
+
+    try {
+      var response = await request.send();
+      String responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
         var decodedResponse = jsonDecode(responseBody);
         String aiResponse = decodedResponse is Map<String, dynamic>
             ? decodedResponse.values.first.toString()
             : responseBody;
 
         setState(() {
-          chatMessages.add({
-            "role": "user",
-            "text": "Uploaded $fileType",
-            "fileInfo": file.path, // ✅ Save the image file path
-            "fileType": fileType,
-          });
+          // Remove typing indicator
+          chatMessages.removeWhere((msg) => msg["isTyping"] == true);
+
+          // Add actual AI response
           chatMessages.add({
             "role": "assistant",
             "text": aiResponse,
           });
         });
-      } catch (e) {
+      } else {
         setState(() {
+          chatMessages.removeWhere((msg) => msg["isTyping"] == true);
           chatMessages.add({
             "role": "assistant",
-            "text": responseBody,
+            "text": "⚠️ Error uploading file: $responseBody",
           });
         });
       }
-    } else {
+    } catch (e) {
       setState(() {
+        chatMessages.removeWhere((msg) => msg["isTyping"] == true);
         chatMessages.add({
           "role": "assistant",
-          "text": "⚠️ Error uploading file: $responseBody",
+          "text": "⚠️ Error connecting to server.",
         });
       });
     }
@@ -403,6 +428,22 @@ class _ASKMeState extends State<ASKMe> {
   void _sendMessage() async {
     String message = _textController.text.trim();
     if (message.isNotEmpty) {
+      setState(() {
+        chatMessages.add({"role": "user", "text": message});
+        chatMessages.add(
+            {"role": "ai", "text": "AI is typing..."}); // Temporary message
+        _textController.clear();
+      });
+
+      // Scroll to bottom immediately
+      Future.delayed(Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+
       // ASKMe backend URL
       var url = Uri.parse(
           '${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/process_text');
@@ -413,22 +454,23 @@ class _ASKMeState extends State<ASKMe> {
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
           body: {
             'text': message,
-            'target_language': selectedLanguage, // Use selectedLanguage here
+            'target_language': selectedLanguage,
           },
         );
 
         if (response.statusCode == 200) {
-          // Decode the response properly to support all languages
           String aiResponse = utf8.decode(response.bodyBytes);
           String aiMessage = jsonDecode(aiResponse)['response'];
 
           setState(() {
-            chatMessages.add({"role": "user", "text": message});
-            chatMessages.add({"role": "ai", "text": aiMessage});
-            _textController.clear();
+            // Replace "AI is typing..." with the actual response
+            chatMessages[chatMessages.length - 1] = {
+              "role": "ai",
+              "text": aiMessage
+            };
           });
 
-          // Scroll to the bottom after a short delay
+          // Scroll again to show the AI response
           Future.delayed(Duration(milliseconds: 100), () {
             _scrollController.animateTo(
               _scrollController.position.maxScrollExtent,
@@ -437,10 +479,21 @@ class _ASKMeState extends State<ASKMe> {
             );
           });
         } else {
-          print("Failed to send message: ${response.statusCode}");
+          setState(() {
+            chatMessages[chatMessages.length - 1] = {
+              "role": "ai",
+              "text": "Oops! Something went wrong. Please try again."
+            };
+          });
         }
       } catch (error) {
-        print("Error sending message: $error");
+        setState(() {
+          chatMessages[chatMessages.length - 1] = {
+            "role": "ai",
+            "text":
+                "Error connecting to the server. Please check your internet connection."
+          };
+        });
       }
     }
   }
@@ -796,13 +849,14 @@ class _ASKMeState extends State<ASKMe> {
       controller: _scrollController,
       itemCount: chatMessages.length,
       itemBuilder: (context, index) {
-        Map<String, String> message = chatMessages[index];
+        Map<String, dynamic> message = chatMessages[index];
         bool isUser = message["role"] == "user";
 
         return Column(
           crossAxisAlignment:
               isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
+            // Profile Picture
             if (!isUser)
               CircleAvatar(
                 backgroundImage: AssetImage("assets/icons/ASKMe_dark.png"),
@@ -813,6 +867,8 @@ class _ASKMeState extends State<ASKMe> {
                 backgroundImage: AssetImage("assets/images/userImage.png"),
                 radius: 20,
               ),
+
+            // Display Image
             if (message.containsKey("fileType") &&
                 message["fileType"] == "Image")
               GestureDetector(
@@ -821,61 +877,137 @@ class _ASKMeState extends State<ASKMe> {
                     context,
                     MaterialPageRoute(
                       builder: (context) =>
-                          FullScreenImage(imagePath: message["fileInfo"]!),
+                          FullScreenImage(imagePath: message["fileInfo"]),
                     ),
                   );
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Image.file(
-                    File(message["fileInfo"]!),
+                    File(message["fileInfo"]),
                     width: 200,
                     height: 200,
                     fit: BoxFit.cover,
                   ),
                 ),
               ),
-            Container(
-              constraints: BoxConstraints(
-                maxWidth: isUser
-                    ? MediaQuery.of(context).size.width * 0.60
-                    : MediaQuery.of(context).size.width * 0.80,
-              ),
-              padding: EdgeInsets.all(15),
-              margin: EdgeInsets.symmetric(vertical: 5),
-              decoration: BoxDecoration(
-                gradient: isUser
-                    ? LinearGradient(
-                        colors: [
-                          Colors.blue[300]!,
-                          Colors.blue[700]!
-                        ], // Subtle gradient for user
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null, // No gradient for AI
-                color: isUser ? null : Colors.grey[300]!, // Flat color for AI
-                borderRadius: BorderRadius.circular(
-                    isUser ? 20 : 15), // More rounding for user messages
-                boxShadow: isUser
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(
-                              0.15), // Soft shadow for user messages
-                          blurRadius: 6,
-                          offset: Offset(2, 4),
-                        ),
-                      ]
-                    : [], // No shadow for AI messages
-              ),
-              child: Text(
-                message["text"]!,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isUser ? Colors.white : Colors.black,
+
+            // Display Video with Play Button Overlay
+            if (message.containsKey("fileType") &&
+                message["fileType"] == "Video")
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          FullScreenVideo(videoPath: message["fileInfo"]),
+                    ),
+                  );
+                },
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 250,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black12,
+                      ),
+                    ),
+                    Icon(Icons.play_circle_fill, size: 50, color: Colors.white),
+                  ],
                 ),
               ),
-            )
+
+            // Display Audio Player
+            if (message.containsKey("fileType") &&
+                message["fileType"] == "Audio")
+              Container(
+                width: MediaQuery.of(context).size.width * 0.75,
+                margin: EdgeInsets.symmetric(vertical: 5),
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[100],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: AudioPlayerWidget(audioPath: message["fileInfo"]),
+              ),
+
+            // Display Document Preview
+            if (message.containsKey("fileType") &&
+                message["fileType"] != "Image" &&
+                message["fileType"] != "Video" &&
+                message["fileType"] != "Audio")
+              GestureDetector(
+                onTap: () {
+                  OpenFile.open(message["fileInfo"]);
+                },
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.55,
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.insert_drive_file, color: Colors.blue),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Open Document",
+                          style: TextStyle(color: Colors.blue),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Chat Message Bubble
+            if (message.containsKey("text") && message["isTyping"] != true)
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: isUser
+                      ? MediaQuery.of(context).size.width * 0.60
+                      : MediaQuery.of(context).size.width * 0.80,
+                ),
+                padding: EdgeInsets.all(15),
+                margin: EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  gradient: isUser
+                      ? LinearGradient(
+                          colors: [Colors.blue[300]!, Colors.blue[700]!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: isUser ? null : Colors.grey[300]!,
+                  borderRadius: BorderRadius.circular(isUser ? 20 : 15),
+                  boxShadow: isUser
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 6,
+                            offset: Offset(2, 4),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Text(
+                  message["text"],
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isUser ? Colors.white : Colors.black,
+                  ),
+                ),
+              ),
+
+            // Typing Indicator
+            if (message["isTyping"] == true) TypingIndicator(),
           ],
         );
       },

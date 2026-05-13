@@ -17,8 +17,6 @@ class HomePage extends StatelessWidget {
   final VoidCallback onProfileTap;
   final VoidCallback onAskMeTap;
   final PageController _pageController = PageController();
-  final ValueNotifier<bool> _showSearchUI = ValueNotifier(false); // Use ValueNotifier
-
 
   HomePage({
     Key? key,
@@ -26,114 +24,7 @@ class HomePage extends StatelessWidget {
     required this.onAskMeTap,
   }) : super(key: key);
 
-  @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: _showSearchUI,
-      builder: (context, showSearch, child) {
-        return Scaffold(
-          body: showSearch ? _buildSearchUI() : _buildMainUI(context),
-        );
-      },
-    );
-  }
-
-  Widget _buildSearchUI() {
-    return GestureDetector(
-      onTap: () {
-        _showSearchUI.value = false; // Update notifier instead of setState()
-      },
-      behavior: HitTestBehavior.opaque, // Ensures taps outside are detected
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Search...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(26.0),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.grey[200],
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView( // Ensures content scrolls
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Popular Searches",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8.0,
-                      children: [
-                        ActionChip(
-                          label: Text("Machine Learning"),
-                          onPressed: () {
-                            print("Machine Learning clicked");
-                            // Handle chip click action here
-                          },
-                        ),
-                        ActionChip(
-                          label: Text("Data Science"),
-                          onPressed: () {
-                            print("Data Science clicked");
-                            // Handle chip click action here
-                          },
-                        ),
-                        ActionChip(
-                          label: Text("Flutter"),
-                          onPressed: () {
-                            print("Flutter clicked");
-                            // Handle chip click action here
-                          },
-                        ),
-                        ActionChip(
-                          label: Text("Linear Algebra"),
-                          onPressed: () {
-                            print("Linear Algebra clicked");
-                            // Handle chip click action here
-                          },
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 20),
-                    Text(
-                      "Recent Searches",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 10),
-                    ListTile(
-                      leading: Icon(Icons.history),
-                      title: Text("Advanced Python"),
-                      onTap: () {}, // Keep these as they are
-                    ),
-                    ListTile(
-                      leading: Icon(Icons.history),
-                      title: Text("Cyber Security"),
-                      onTap: () {},
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMainUI(BuildContext context) {
     // GlobalKey for controlling the Scaffold state (drawer)
     final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
     return ASKMeButton(
@@ -158,19 +49,17 @@ class HomePage extends StatelessWidget {
               padding:
               const EdgeInsets.only(top: 15.0), // Adjust top padding here
               child: getAppBarUI(
-                onProfileTap,
-                    () {
-                  scaffoldKey.currentState
-                      ?.openDrawer(); // Open drawer when custom button is clicked
-                },
-                context
+                  onProfileTap,
+                      () {
+                    scaffoldKey.currentState
+                        ?.openDrawer(); // Open drawer when custom button is clicked
+                  },context
               ),
             ),
           ),
         ),
         // Use drawer for left-side drawer
         backgroundColor: AcademeTheme.appColor, // Set background same as AppBar
-
         body: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -193,11 +82,8 @@ class HomePage extends StatelessWidget {
                         padding:
                         const EdgeInsets.only(top: 10.0), // Upper padding
                         child: TextField(
-                          onTap: () {
-                            _showSearchUI.value = true; // Update state properly
-                          },
                           decoration: InputDecoration(
-                            hintText: 'Search',
+                            hintText: L10n.getTranslatedText(context, 'Search'),
                             prefixIcon: Padding(
                               padding: const EdgeInsets.only(
                                   left: 12.0, right: 8.0), // Spacing
@@ -275,9 +161,9 @@ class HomePage extends StatelessWidget {
                                 // Texts
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: const [
+                                  children:  [
                                     Text(
-                                      "Your Personal Tutor",
+                                      L10n.getTranslatedText(context, 'Your Personal Tutor'),
                                       style: TextStyle(
                                         color: Color.fromARGB(255, 10, 10, 10),
                                         fontSize: 24,
@@ -312,7 +198,7 @@ class HomePage extends StatelessWidget {
                                         contentPadding: EdgeInsets.symmetric(
                                             vertical: 10,
                                             horizontal: 12), // Adjust padding
-                                        hintText: "ASKMe Anything...",
+                                        hintText: L10n.getTranslatedText(context, 'ASKMe Anything...'),
                                         hintStyle:
                                         TextStyle(color: Colors.grey[600]),
                                         filled: true,
@@ -460,21 +346,27 @@ class HomePage extends StatelessWidget {
 
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: const [
+                        children: [
                           Text(
-                            "Continue Learning",
+                            L10n.getTranslatedText(context, 'Continue Learning'),
                             style: TextStyle(
                                 fontWeight: FontWeight.bold, fontSize: 20),
                           ),
-                          Text(
-                            "See All",
-                            style: TextStyle(color: Colors.blue),
+                          GestureDetector(
+                            onTap: () {
+                              // Find the BottomNavigationBar and switch to the My Courses tab
+                              Provider.of<BottomNavProvider>(context, listen: false).setIndex(1);
+                            },
+                            child: Text(
+                              L10n.getTranslatedText(context, 'See All'),
+                              style: TextStyle(color: Colors.blue),
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
                       learningCard(
-                          "Linear Algebra", 4, 9, 34, Colors.pink[100]!, () {
+                          L10n.getTranslatedText(context, 'Linear Algebra'), 4, 9, 34, Colors.pink[100]!, () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -483,7 +375,7 @@ class HomePage extends StatelessWidget {
                       }),
                       const SizedBox(height: 12),
                       learningCard(
-                          "Atoms & Molecules", 7, 13, 65, Colors.blue[100]!,
+                          L10n.getTranslatedText(context, 'Atoms & Molecules'), 7, 13, 65, Colors.blue[100]!,
                               () {
                             Navigator.push(
                               context,
@@ -493,7 +385,7 @@ class HomePage extends StatelessWidget {
                           }),
                       const SizedBox(height: 12),
                       learningCard(
-                          "Atoms & Molecules", 7, 13, 65, Colors.green[100]!,
+                          L10n.getTranslatedText(context, 'Atoms & Molecules'), 7, 13, 65, Colors.green[100]!,
                               () {
                             Navigator.push(
                               context,
@@ -520,23 +412,20 @@ class HomePage extends StatelessWidget {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Row(
-                                mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    "All Courses",
-                                    style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold),
+                                    L10n.getTranslatedText(context, 'All Courses'),
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                   ),
                                   TextButton(
                                     onPressed: () {
-                                      // Handle 'See All' action
+                                      // Switch to the Courses tab using BottomNavProvider
+                                      Provider.of<BottomNavProvider>(context, listen: false).setIndex(1);
                                     },
-                                    child: Text(
-                                      "See All",
-                                      style: TextStyle(
-                                          fontSize: 16, color: Colors.blue),
+                                    child:  Text(
+                                      L10n.getTranslatedText(context, 'See All'),
+                                      style: TextStyle(fontSize: 16, color: Colors.blue),
                                     ),
                                   ),
                                 ],
@@ -578,7 +467,7 @@ class HomePage extends StatelessWidget {
                                                     color: Colors.red),
                                               ),
                                               SizedBox(width: 10),
-                                              Text("English",
+                                              Text(L10n.getTranslatedText(context, 'English'),
                                                   style: TextStyle(
                                                       fontSize: 14,
                                                       fontWeight:
@@ -613,7 +502,7 @@ class HomePage extends StatelessWidget {
                                                     color: Colors.orange),
                                               ),
                                               SizedBox(width: 10),
-                                              Text("Maths",
+                                              Text(L10n.getTranslatedText(context, 'Maths'),
                                                   style: TextStyle(
                                                       fontSize: 14,
                                                       fontWeight:
@@ -651,7 +540,7 @@ class HomePage extends StatelessWidget {
                                                     color: Colors.blue),
                                               ),
                                               SizedBox(width: 10),
-                                              Text("Language",
+                                              Text(L10n.getTranslatedText(context, 'Language'),
                                                   style: TextStyle(
                                                       fontSize: 14,
                                                       fontWeight:
@@ -686,7 +575,7 @@ class HomePage extends StatelessWidget {
                                                     color: Colors.green),
                                               ),
                                               SizedBox(width: 10),
-                                              Text("Biology",
+                                              Text(L10n.getTranslatedText(context, 'Biology'),
                                                   style: TextStyle(
                                                       fontSize: 14,
                                                       fontWeight:
@@ -707,23 +596,20 @@ class HomePage extends StatelessWidget {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Row(
-                                mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    "My Courses",
-                                    style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold),
+                                    L10n.getTranslatedText(context, 'My Courses'),
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                   ),
                                   TextButton(
                                     onPressed: () {
-                                      // Handle 'See All' action
+                                      // Switch to the Courses tab using BottomNavProvider
+                                      Provider.of<BottomNavProvider>(context, listen: false).setIndex(1);
                                     },
                                     child: Text(
-                                      "See All",
-                                      style: TextStyle(
-                                          fontSize: 16, color: Colors.blue),
+                                      L10n.getTranslatedText(context, 'See All'),
+                                      style: TextStyle(fontSize: 16, color: Colors.blue),
                                     ),
                                   ),
                                 ],
@@ -735,12 +621,14 @@ class HomePage extends StatelessWidget {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: CourseCard("Biology", "16 Lessons",
+                                    child: CourseCard(L10n.getTranslatedText(context, 'Biology'),
+                                        "16 ${L10n.getTranslatedText(context, 'Lessons')}",
                                         Colors.purple[100]!),
                                   ),
                                   SizedBox(width: 8),
                                   Expanded(
-                                    child: CourseCard("Computer", "18 Lessons",
+                                    child: CourseCard(L10n.getTranslatedText(context, 'Computer'),
+                                        "18 ${L10n.getTranslatedText(context, 'Lessons')}",
                                         Colors.blue[100]!),
                                   ),
                                 ],
@@ -753,7 +641,7 @@ class HomePage extends StatelessWidget {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Text(
-                                "Recommended",
+                                L10n.getTranslatedText(context, 'Recommended'),
                                 style: TextStyle(
                                     fontSize: 18, fontWeight: FontWeight.bold),
                               ),
@@ -764,12 +652,14 @@ class HomePage extends StatelessWidget {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    child: CourseCard("Marketing", "9 Lessons",
+                                    child: CourseCard(L10n.getTranslatedText(context, 'Marketing'),
+                                        "9 ${L10n.getTranslatedText(context, 'Lessons')}",
                                         Colors.pink[100]!),
                                   ),
                                   SizedBox(width: 8),
                                   Expanded(
-                                    child: CourseCard("Trading", "14 Lessons",
+                                    child: CourseCard(L10n.getTranslatedText(context, 'Trading'),
+                                        "14 ${L10n.getTranslatedText(context, 'Lessons')}",
                                         Colors.green[100]!),
                                   ),
                                 ],
@@ -799,8 +689,6 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
-
-
 }
 
 Widget barGraph(double yellowHeight, double purpleHeight) {
