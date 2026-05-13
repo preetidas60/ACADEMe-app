@@ -1,10 +1,10 @@
 import google.generativeai as genai
 import json
-from config.settings import GEMINI_API_KEY
+from config.settings import GOOGLE_GEMINI_API_KEY
 from services.progress_service import fetch_student_performance
 from services.quiz_service import QuizService
 
-genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GOOGLE_GEMINI_API_KEY)
 
 async def get_recommendations(user_id: str):
     """
@@ -41,7 +41,7 @@ async def get_recommendations(user_id: str):
     Also Remember each quiz is worth 100 points.
     """
 
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
 
     response_text = response.text

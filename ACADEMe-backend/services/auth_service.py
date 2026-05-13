@@ -22,7 +22,8 @@ async def register_user(user: UserCreate):
             "name": user.name,
             "email": user.email,
             "student_class": user.student_class,
-            "password": hashed_password
+            "password": hashed_password,
+            "photo_url": user.photo_url
         }
 
         # Store user in Firestore
@@ -30,17 +31,24 @@ async def register_user(user: UserCreate):
 
         # ✅ Generate JWT token
         token = create_jwt_token(
-            {"id": user_record.uid, "email": user.email, "student_class": user.student_class}
+            {
+                "id": user_record.uid,
+                "email": user.email,
+                "student_class": user.student_class,
+                "name": user.name,  # ✅ Fixed
+                "photo_url": user.photo_url,
+            }
         )
 
         return TokenResponse(
             access_token=token,
             token_type="bearer",
-            expires_in=TOKEN_EXPIRY,  
+            expires_in=TOKEN_EXPIRY,
             created_at=datetime.datetime.utcnow().isoformat(),
             email=user.email,
             student_class=user.student_class,
-            name=user.name
+            name=user.name,
+            photo_url=user.photo_url
         )
 
     except auth.EmailAlreadyExistsError:
@@ -63,19 +71,26 @@ async def login_user(user: UserLogin):
         if not verify_password(user.password, user_data["password"]):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # ✅ Generate JWT token
+        # ✅ Generate JWT token (Include photo_url)
         token = create_jwt_token(
-            {"id": user_data["id"], "email": user.email, "student_class": user_data["student_class"]}
+            {
+                "id": user_data["id"],
+                "email": user.email,
+                "student_class": user_data["student_class"],
+                "name": user_data.get("name", ""),
+                "photo_url": user_data.get("photo_url", None),
+            }
         )
 
         return TokenResponse(
             access_token=token,
             token_type="bearer",
-            expires_in=TOKEN_EXPIRY,  
+            expires_in=TOKEN_EXPIRY,
             created_at=datetime.datetime.utcnow().isoformat(),
             email=user.email,
             student_class=user_data["student_class"],
-            name=user_data["name"]
+            name=user_data["name"],
+            photo_url=user_data.get("photo_url", None),
         )
 
     except HTTPException:
