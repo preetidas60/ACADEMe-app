@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:ACADEMe/academe_theme.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'qna.dart';
 import 'lessons.dart';
 
@@ -34,6 +36,12 @@ class OverviewScreenState extends State<OverviewScreen>
   bool isLoading = true;
   bool hasSubtopicData = false;
 
+  // Progress tracking variables
+  List<Map<String, dynamic>> userProgress = [];
+  double progressPercentage = 0.0;
+  int completedSubtopics = 0;
+  int totalSubtopics = 0;
+
   @override
   void initState() {
     super.initState();
@@ -43,18 +51,19 @@ class OverviewScreenState extends State<OverviewScreen>
   }
 
   Future<void> fetchData() async {
-    await fetchTopicDetails(); // Fetch from topics endpoint
-    await fetchSubtopicData(); // Fetch from subtopics endpoint
+    await fetchTopicDetails();
+    await fetchSubtopicData();
+    await fetchUserProgress();
   }
 
   Future<void> fetchTopicDetails() async {
     String? token = await storage.read(key: 'access_token');
     if (token == null) {
-      debugPrint("❌ Missing access token");
+      log("❌ Missing access token");
       return;
     }
     if (!mounted) {
-      return; // Ensure widget is still active before using context
+      return;
     }
 
     final targetLanguage = Provider.of<LanguageProvider>(context, listen: false)
@@ -71,7 +80,7 @@ class OverviewScreenState extends State<OverviewScreen>
         },
       );
 
-      debugPrint("🔹 Topic API Response: ${response.body}");
+      log("🔹 Topic API Response: ${response.body}");
 
       if (response.statusCode == 200) {
         final String responseBody = utf8.decode(response.bodyBytes);
@@ -88,18 +97,18 @@ class OverviewScreenState extends State<OverviewScreen>
         }
       }
     } catch (e) {
-      debugPrint("❌ Error fetching topic details: $e");
+      log("❌ Error fetching topic details: $e");
     }
   }
 
   Future<void> fetchSubtopicData() async {
     String? token = await storage.read(key: 'access_token');
     if (token == null) {
-      debugPrint("❌ Missing access token");
+      log("❌ Missing access token");
       return;
     }
     if (!mounted) {
-      return; // Ensure widget is still active before using context
+      return;
     }
     final targetLanguage = Provider.of<LanguageProvider>(context, listen: false)
         .locale
@@ -116,16 +125,157 @@ class OverviewScreenState extends State<OverviewScreen>
       );
 
       if (response.statusCode == 200) {
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final List<dynamic> subtopics = jsonDecode(responseBody);
+
         setState(() {
           hasSubtopicData = true;
+          totalSubtopics = subtopics.length;
         });
+
+        // Store total subtopics for progress calculation
+        _storeTopicTotalSubtopics(widget.courseId, widget.topicId, totalSubtopics);
       }
     } catch (e) {
-      debugPrint("❌ Error fetching subtopic data: $e");
+      log("❌ Error fetching subtopic data: $e");
     } finally {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  // Store total subtopics for topic
+  Future<void> _storeTopicTotalSubtopics(String courseId, String topicId, int total) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('total_subtopics_${courseId}_${topicId}', total);
+  }
+
+  // Check if all materials in a subtopic are completed
+  bool _isSubtopicCompleted(String subtopicId) {
+    // Get all materials for this subtopic
+    final subtopicMaterials = userProgress.where((progress) =>
+    progress['subtopic_id'] == subtopicId &&
+        progress['activity_type'] == 'reading');
+
+    // Get all quizzes for this subtopic
+    final subtopicQuizzes = userProgress.where((progress) =>
+    progress['subtopic_id'] == subtopicId &&
+        progress['activity_type'] == 'quiz');
+
+    // Check if any material is not completed
+    final hasIncompleteMaterial = subtopicMaterials.any(
+            (material) => material['status'] != 'completed');
+
+    // Check if any quiz is not completed
+    final hasIncompleteQuiz = subtopicQuizzes.any(
+            (quiz) => quiz['status'] != 'completed');
+
+    return !hasIncompleteMaterial && !hasIncompleteQuiz;
+  }
+
+  Future<void> fetchUserProgress() async {
+    String? token = await storage.read(key: 'access_token');
+    if (token == null) return;
+    if (!mounted) return;
+
+    final targetLanguage = Provider.of<LanguageProvider>(context, listen: false)
+        .locale
+        .languageCode;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$backendUrl/api/progress/?target_language=$targetLanguage'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final String responseBody = utf8.decode(response.bodyBytes);
+        final Map<String, dynamic> data = jsonDecode(responseBody);
+
+        // Filter progress for current course and topic
+        final progress = List<Map<String, dynamic>>.from(data['progress'])
+            .where((progress) =>
+        progress['course_id'] == widget.courseId &&
+            progress['topic_id'] == widget.topicId)
+            .toList();
+
+        // Calculate completed subtopics
+        final Set<String> completedSubIds = {};
+        for (final p in progress) {
+          if (p['status'] == 'completed' &&
+              p['subtopic_id'] != null &&
+              _isSubtopicCompleted(p['subtopic_id'])) {
+            completedSubIds.add(p['subtopic_id']);
+            // Mark subtopic as completed
+            _markSubtopicCompleted(widget.courseId, widget.topicId, p['subtopic_id']);
+          }
+        }
+
+        setState(() {
+          userProgress = progress;
+          completedSubtopics = completedSubIds.length;
+          progressPercentage = totalSubtopics > 0
+              ? completedSubtopics / totalSubtopics
+              : 0.0;
+        });
+
+        // Save topic progress
+        _saveTopicProgress(widget.courseId, widget.topicId, progressPercentage);
+
+        // Save course progress if topic is completed
+        if (progressPercentage == 1.0) {
+          _saveCourseProgress(widget.courseId);
+        }
+      }
+    } catch (e) {
+      log("❌ Error fetching progress: $e");
+    }
+  }
+
+  // Mark subtopic as completed
+  Future<void> _markSubtopicCompleted(String courseId, String topicId, String subtopicId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'completed_subtopics_${courseId}_${topicId}';
+    List<String> completed = prefs.getStringList(key) ?? [];
+    if (!completed.contains(subtopicId)) {
+      completed.add(subtopicId);
+      await prefs.setStringList(key, completed);
+    }
+  }
+
+  // Save course progress to shared preferences
+  Future<void> _saveCourseProgress(String courseId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final completedCourses = prefs.getStringList('completed_courses') ?? [];
+
+    if (!completedCourses.contains(courseId)) {
+      completedCourses.add(courseId);
+      await prefs.setStringList('completed_courses', completedCourses);
+      log("✅ Saved course progress: $courseId");
+    }
+  }
+
+  // Save topic progress to shared preferences
+  Future<void> _saveTopicProgress(String courseId, String topicId, double progress) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Save progress percentage
+    await prefs.setDouble('progress_${courseId}_${topicId}', progress);
+
+    // Save as completed if progress is 100%
+    if (progress == 1.0) {
+      final completedTopics = prefs.getStringList('completed_topics') ?? [];
+      final topicKey = '$courseId|$topicId';
+
+      if (!completedTopics.contains(topicKey)) {
+        completedTopics.add(topicKey);
+        await prefs.setStringList('completed_topics', completedTopics);
+        log("✅ Saved topic progress: $topicKey");
+      }
     }
   }
 
@@ -249,12 +399,12 @@ class OverviewScreenState extends State<OverviewScreen>
                               ),
                               SizedBox(height: height * 0.005),
                               Text(
-                                  "0/12 ${L10n.getTranslatedText(context, 'Modules')}"),
+                                  "$completedSubtopics/$totalSubtopics ${L10n.getTranslatedText(context, 'Modules')}"),
                               SizedBox(height: height * 0.01),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: LinearProgressIndicator(
-                                  value: 0.0,
+                                  value: progressPercentage,
                                   color: AcademeTheme.appColor,
                                   backgroundColor: const Color(0xFFE8E5FB),
                                   minHeight: height * 0.012,
@@ -293,8 +443,10 @@ class OverviewScreenState extends State<OverviewScreen>
                     children: [
                       hasSubtopicData
                           ? LessonsSection(
-                          courseId: widget.courseId,
-                          topicId: widget.topicId)
+                        courseId: widget.courseId,
+                        topicId: widget.topicId,
+                        userProgress: userProgress,
+                      )
                           : Center(child: CircularProgressIndicator()),
                       QSection(),
                     ],
