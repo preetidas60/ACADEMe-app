@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
 import 'package:ACADEMe/academe_theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../controllers/ask_me_controller.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import '../models/chat_message.dart';
@@ -100,7 +101,7 @@ class _AskMeScreenState extends State<AskMeScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: IconButton(
-                icon: const Icon(Icons.menu, size: 28, color: Colors.white),
+                icon: const Icon(Icons.menu, size: 24, color: Colors.white),
                 onPressed: () {
                   _scaffoldKey.currentState?.openDrawer();
                 },
@@ -126,7 +127,7 @@ class _AskMeScreenState extends State<AskMeScreen> {
                     onPressed: controller.startNewChat,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.translate, size: 28, color: Colors.white),
+                    icon: const Icon(Icons.translate, size: 24, color: Colors.white),
                     onPressed: () {
                       _showLanguageSelection(context, controller);
                     },
@@ -299,28 +300,50 @@ class _AskMeScreenState extends State<AskMeScreen> {
                 isUser: isUser,
               ),
             if (!isUser && message.isTyping != true)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.flag, color: Colors.grey[600], size: 18),
-                    onPressed: () {
-                      _showReportDialog(context, message);
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.content_copy, size: 18),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: message.text!));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(L10n.getTranslatedText(context, 'Copied to clipboard')),
-                          duration: const Duration(seconds: 2),
+              Transform.translate(
+                offset: const Offset(0, -3), // Move up by 8 pixels
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 32, // Reduce button width to bring icons closer
+                      height: 32,
+                      child: IconButton(
+                        padding: EdgeInsets.zero, // Remove default padding
+                        icon: Image.asset(
+                          'assets/icons/duplicate.png',
+                          width: 18,
+                          height: 18,
+                          color: Colors.grey[600],
                         ),
-                      );
-                    },
-                  ),
-                ],
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: message.text!));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(L10n.getTranslatedText(context, 'Copied to clipboard')),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32, // Reduce button width to bring icons closer
+                      height: 32,
+                      child: IconButton(
+                        padding: EdgeInsets.zero, // Remove default padding
+                        icon: Image.asset(
+                          'assets/icons/red-flag.png',
+                          width: 18,
+                          height: 18,
+                        ),
+                        onPressed: () {
+                          _showReportDialog(context, message);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (message.isTyping == true) const TypingIndicator(),
           ],
@@ -328,6 +351,7 @@ class _AskMeScreenState extends State<AskMeScreen> {
       },
     );
   }
+
 
   Widget _buildFilePreview(BuildContext context, ChatMessage message) {
     switch (message.fileType) {
@@ -417,6 +441,7 @@ class _AskMeScreenState extends State<AskMeScreen> {
     }
   }
 
+
   void _showReportDialog(BuildContext context, ChatMessage message) {
     TextEditingController reportController = TextEditingController();
     bool isButtonEnabled = false;
@@ -456,7 +481,7 @@ class _AskMeScreenState extends State<AskMeScreen> {
                 TextButton(
                   onPressed: isButtonEnabled
                       ? () {
-                    _submitReport(message, reportController.text);
+                    _sendEmail(message.text ?? '', reportController.text);
                     Navigator.pop(context);
                   }
                       : null,
@@ -470,15 +495,71 @@ class _AskMeScreenState extends State<AskMeScreen> {
     );
   }
 
-  void _submitReport(ChatMessage message, String reportReason) {
-    print("Reported message: ${message.text} | Reason: $reportReason");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(L10n.getTranslatedText(context, 'Report submitted.')),
-        duration: const Duration(seconds: 2),
+
+  Future<void> _sendEmail(String? messageText, String reportReason) async {
+    final subject = Uri.encodeComponent('Report: Message Issue');
+    final body = Uri.encodeComponent(
+      'Reported message:\n${messageText ?? 'No message'}\n\nReason:\n$reportReason',
+    );
+
+    final Uri emailUri = Uri.parse(
+      'mailto:dasp69833@gmail.com?subject=$subject&body=$body',
+    );
+
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        final launched = await launchUrl(
+          emailUri,
+          mode: LaunchMode.externalApplication, // Force external app
+        );
+
+        if (launched) {
+          // Show confirmation that email client opened
+          _showInfoDialog('Email client opened. Please send the email to complete your report.');
+        } else {
+          _showErrorDialog('Failed to open email client. Please try again.');
+        }
+      } else {
+        _showErrorDialog('No email client found. Please install Gmail or another email app.');
+      }
+    } catch (e) {
+      print('Error launching email: $e');
+      _showErrorDialog('Error opening email client: ${e.toString()}');
+    }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(L10n.getTranslatedText(context, 'Error')),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(L10n.getTranslatedText(context, 'OK')),
+          ),
+        ],
       ),
     );
   }
+
+  void _showInfoDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(L10n.getTranslatedText(context, 'Info')),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(L10n.getTranslatedText(context, 'OK')),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildInputBar(BuildContext context, AskMeController controller) {
     return AnimatedPadding(

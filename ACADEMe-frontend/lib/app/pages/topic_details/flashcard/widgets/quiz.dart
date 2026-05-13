@@ -1,10 +1,12 @@
 import 'package:ACADEMe/academe_theme.dart';
+import 'package:ACADEMe/api_endpoints.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../../../../providers/progress_provider.dart';
 
 class QuizPage extends StatefulWidget {
   final List<Map<String, dynamic>> quizzes;
@@ -36,8 +38,6 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
   int _currentQuestionIndex = 0;
   int? _selectedAnswer;
   bool isSubmitting = false;
-  final String _baseUrl = dotenv.env['BACKEND_URL'] ??
-      'http://10.0.2.2:8000'; // Replace with your API endpoint
   List<dynamic> _progressList = [];
   final FlutterSecureStorage _storage =
   const FlutterSecureStorage(); // Add FlutterSecureStorage
@@ -115,166 +115,46 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
   }
 
   Future<void> _fetchProgress() async {
-    String? token =
-    await _storage.read(key: 'access_token'); // Retrieve the access token
-    if (!mounted) {
-      return; // Ensure widget is still active before using context
-    }
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                L10n.getTranslatedText(context, 'Access token not found'))),
+    final progressProvider = ProgressProvider();
+    setState(() {
+      _progressList = progressProvider.getCourseProgress(widget.courseId, widget.topicId);
+    });
+
+    // Fetch fresh data only if cache is empty or expired
+    if (_progressList.isEmpty) {
+      final freshProgress = await progressProvider.fetchProgress(
+        courseId: widget.courseId,
+        topicId: widget.topicId,
       );
-      return;
-    }
-
-    final response = await http.get(
-      Uri.parse(
-          "$_baseUrl/api/progress/?target_language=en"), // Hardcoded "en" for English
-      headers: {
-        'Authorization':
-        'Bearer $token', // Include the access token in the headers
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
       setState(() {
-        _progressList = data["progress"];
+        _progressList = freshProgress;
       });
-    } else if (response.statusCode == 404) {
-      // Handle 404 Not Found error (no progress records)
-      final responseBody = json.decode(response.body);
-      if (responseBody["detail"] == "No progress records found") {
-        setState(() {
-          _progressList = []; // Treat as an empty progress list
-        });
-      } else {
-        if (!mounted) {
-          return; // Ensure widget is still active before using context
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(L10n.getTranslatedText(
-                  context, 'No progress records found'))),
-        );
-      }
-    } else {
-      if (!mounted) {
-        return; // Ensure widget is still active before using context
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                L10n.getTranslatedText(context, 'Failed to fetch progress'))),
-      );
     }
   }
 
-  Future<void> _sendProgress(
-      bool isCorrect, String quizId, String questionId) async {
-    String? token = await _storage.read(key: 'access_token');
-    if (!mounted) {
-      return;
-    }
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                L10n.getTranslatedText(context, 'Access token not found'))),
-      );
-      return;
-    }
-
+  Future<void> _sendProgress(bool isCorrect, String quizId, String questionId) async {
     // Calculate score per question
     final totalQuestions = widget.quizzes.length;
     final scorePerQuestion = totalQuestions > 0 ? (100 / totalQuestions) : 0;
     final score = isCorrect ? scorePerQuestion : 0;
 
-    final existingProgress = _progressList.firstWhere(
-          (progress) =>
-      progress["quiz_id"] == quizId &&
-          progress["question_id"] == questionId,
-      orElse: () => null,
-    );
+    final progressData = {
+      "course_id": widget.courseId,
+      "topic_id": widget.topicId,
+      "subtopic_id": widget.subtopicId,
+      "material_id": null,
+      "quiz_id": quizId,
+      "question_id": questionId,
+      "score": score,
+      "status": "completed",
+      "activity_type": "quiz",
+      "metadata": {"time_spent": "5 minutes"},
+      "timestamp": DateTime.now().toIso8601String(),
+    };
 
-    if (existingProgress == null) {
-      // Create new progress
-      final response = await http.post(
-        Uri.parse("$_baseUrl/api/progress/"),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: json.encode({
-          "course_id": widget.courseId,
-          "topic_id": widget.topicId,
-          "subtopic_id": widget.subtopicId,
-          "material_id": null,
-          "quiz_id": quizId,
-          "question_id": questionId, // Add question_id
-          "score": score,
-          "status": "completed",
-          "activity_type": "quiz",
-          "metadata": {
-            "time_spent": "5 minutes",
-          },
-          "timestamp": DateTime.now().toIso8601String(),
-        }),
-      );
-      if (!mounted) {
-        return;
-      }
-      // if (response.statusCode == 201) {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(
-      //         content: Text(L10n.getTranslatedText(
-      //             context, 'Progress saved successfully'))),
-      //   );
-      // } else {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(
-      //         content: Text(
-      //             L10n.getTranslatedText(context, 'Failed to save progress'))),
-      //   );
-      // }
-    } else {
-      // Update existing progress
-      final progressId = existingProgress["progress_id"];
-      final response = await http.put(
-        Uri.parse("$_baseUrl/api/progress/$progressId"),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: json.encode({
-          "status": "completed",
-          "score": score,
-          "metadata": {
-            "time_spent": "5 minutes",
-          },
-        }),
-      );
-      if (!mounted) {
-        return;
-      }
-
-      // if (response.statusCode == 200) {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(
-      //         content: Text(L10n.getTranslatedText(
-      //             context, 'Progress updated successfully'))),
-      //   );
-      // } else {
-      //   ScaffoldMessenger.of(context).showSnackBar(
-      //     SnackBar(
-      //         content: Text(L10n.getTranslatedText(
-      //             context, 'Failed to update progress'))),
-      //   );
-      // }
-    }
+    // Queue for batched processing
+    final progressProvider = ProgressProvider();
+    progressProvider.queueProgressUpdate(progressData);
   }
 
   // Store result in Shared Preferences
@@ -458,8 +338,7 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
   }
 
 
-  void _showResultPopup(
-      bool isCorrect, String submittedQuizId, String questionId) {
+  void _showResultPopup(bool isCorrect, String submittedQuizId, String questionId) async {
     // Set animation state
     setState(() {
       _lastAnswerCorrect = isCorrect;
@@ -480,8 +359,6 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
       if (!mounted) return;
 
       await _storeQuizResult(isCorrect);
-
-      // FIXED: Send progress BEFORE any state changes or callbacks
       await _sendProgress(isCorrect, submittedQuizId, questionId);
 
       // Hide animations
@@ -491,16 +368,16 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
       _animationController.reset();
       _progressAnimationController.reset();
 
-      // Check if there are more questions in the current quiz
+      // Check if there are more quizzes in the current subtopic
       if (_currentQuestionIndex < widget.quizzes.length - 1) {
-        // Move to next question in current quiz
+        // Move to next quiz in current subtopic
         setState(() {
           isSubmitting = false;
           _currentQuestionIndex++;
           _selectedAnswer = null;
         });
       } else {
-        // All questions completed - reset and trigger callbacks
+        // All quizzes completed - reset and trigger callbacks
         setState(() {
           isSubmitting = false;
           _currentQuestionIndex = 0;
@@ -512,6 +389,7 @@ class QuizPageState extends State<QuizPage> with TickerProviderStateMixin {
           widget.onSwipeToNext!(); // Trigger swipe to next material
         } else {
           if (widget.onQuizComplete != null) {
+            
             widget.onQuizComplete!();
           }
         }

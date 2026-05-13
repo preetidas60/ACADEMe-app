@@ -1,18 +1,17 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../api_endpoints.dart';
 import '../models/course_model.dart';
 
 class CourseController extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final CourseDataCache _cache = CourseDataCache();
-  final String _backendUrl = dotenv.env['BACKEND_URL'] ?? 'https://10.0.2.2:8000';
 
   List<Course> _courses = [];
   bool _isLoading = false;
@@ -23,13 +22,16 @@ class CourseController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get hasInitialized => _hasInitialized;
 
-  List<Course> get ongoingCourses => _courses.where((course) => course.progress < 1.0).toList();
-  List<Course> get completedCourses => _courses.where((course) => course.progress >= 1.0).toList();
+  List<Course> get ongoingCourses =>
+      _courses.where((course) => course.progress < 1.0).toList();
+  List<Course> get completedCourses =>
+      _courses.where((course) => course.progress >= 1.0).toList();
 
   Future<void> initializeCourses(BuildContext context) async {
-    String currentLanguage = Provider.of<LanguageProvider>(context, listen: false)
-        .locale
-        .languageCode;
+    String currentLanguage =
+        Provider.of<LanguageProvider>(context, listen: false)
+            .locale
+            .languageCode;
 
     // Check if language changed and invalidate cache if needed
     _cache.invalidateIfLanguageChanged(currentLanguage);
@@ -57,10 +59,12 @@ class CourseController extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchCourses(BuildContext context, {bool forceRefresh = false}) async {
-    String currentLanguage = Provider.of<LanguageProvider>(context, listen: false)
-        .locale
-        .languageCode;
+  Future<void> fetchCourses(BuildContext context,
+      {bool forceRefresh = false}) async {
+    String currentLanguage =
+        Provider.of<LanguageProvider>(context, listen: false)
+            .locale
+            .languageCode;
 
     // If not forcing refresh and we have valid cached data, use it
     if (!forceRefresh) {
@@ -87,7 +91,7 @@ class CourseController extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('$_backendUrl/api/courses/?target_language=$currentLanguage'),
+        ApiEndpoints.getUri(ApiEndpoints.courses(currentLanguage)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -97,7 +101,8 @@ class CourseController extends ChangeNotifier {
       if (response.statusCode == 200) {
         List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
 
-        List<Course> newCourses = data.map((courseJson) => Course.fromJson(courseJson)).toList();
+        List<Course> newCourses =
+            data.map((courseJson) => Course.fromJson(courseJson)).toList();
 
         // Cache the new data
         _cache.setCachedCourses(newCourses, currentLanguage);
@@ -144,17 +149,44 @@ class CourseController extends ChangeNotifier {
     int totalTopics = prefs.getInt('total_topics_$courseId') ?? 0;
     if (totalTopics == 0) return 0.0;
 
-    List<String> completedTopics = prefs.getStringList('completed_topics') ?? [];
-    int count = completedTopics.where((key) => key.startsWith('$courseId|')).length;
+    List<String> completedTopics =
+        prefs.getStringList('completed_topics') ?? [];
+    int count =
+        completedTopics.where((key) => key.startsWith('$courseId|')).length;
 
     return count / totalTopics;
   }
 
-  Future<String> getModuleProgressText(String courseId, BuildContext context) async {
+// Add this method to CourseController
+  Future<void> refreshCourseProgress(String courseId) async {
+    try {
+      double progress = await _getLocalCourseProgress(courseId);
+      final index = _courses.indexWhere((c) => c.id == courseId);
+
+      if (index != -1) {
+        _courses[index] = _courses[index].copyWith(progress: progress);
+
+        // Update cache if exists
+        String? cachedLanguage = _cache.cachedLanguage;
+        if (cachedLanguage != null) {
+          _cache.setCachedCourses(_courses, cachedLanguage);
+        }
+
+        notifyListeners();
+      }
+    } catch (e) {
+      log("Error refreshing course progress: $e");
+    }
+  }
+
+  Future<String> getModuleProgressText(
+      String courseId, BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     int totalTopics = prefs.getInt('total_topics_$courseId') ?? 0;
-    List<String> completedTopics = prefs.getStringList('completed_topics') ?? [];
-    int completedCount = completedTopics.where((key) => key.startsWith('$courseId|')).length;
+    List<String> completedTopics =
+        prefs.getStringList('completed_topics') ?? [];
+    int completedCount =
+        completedTopics.where((key) => key.startsWith('$courseId|')).length;
 
     // You'll need to import L10n or pass the translated text
     return "$completedCount/$totalTopics Modules"; // Replace with proper localization

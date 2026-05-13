@@ -10,11 +10,17 @@ import '../widgets/qna.dart';
 class OverviewScreen extends StatefulWidget {
   final String courseId;
   final String topicId;
+  final String courseTitle;
+  final String topicTitle;
+  final String language;
 
   const OverviewScreen({
     super.key,
     required this.courseId,
     required this.topicId,
+    required this.courseTitle,
+    required this.topicTitle,
+    required this.language,
   });
 
   @override
@@ -27,6 +33,7 @@ class OverviewScreenState extends State<OverviewScreen>
   late ScrollController _scrollController;
   late OverviewController _controller;
   late OverviewModel _model;
+  final GlobalKey<LessonsSectionState> _lessonsSectionKey = GlobalKey<LessonsSectionState>();
 
   @override
   void initState() {
@@ -57,6 +64,24 @@ class OverviewScreenState extends State<OverviewScreen>
     });
   }
 
+  Future<void> _onRefresh() async {
+    setState(() {
+      _model.updateFromController({
+        ..._model.toMap(),
+        'isLoading': true,
+      });
+    });
+
+    await _fetchData();
+
+    if (_lessonsSectionKey.currentState != null) {
+      await _lessonsSectionKey.currentState!.refreshData();
+    }
+
+    // Update topic cache with latest progress
+    await _controller.updateTopicCacheProgress();
+  }
+
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
@@ -74,10 +99,12 @@ class OverviewScreenState extends State<OverviewScreen>
                 onBackPressed: () => Navigator.pop(context),
               ),
               Expanded(
-                child: NestedScrollView(
-                  controller: _scrollController,
-                  headerSliverBuilder: (context, innerBoxIsScrolled) {
-                    return [
+                child: RefreshIndicator(
+                  onRefresh: _onRefresh,
+                  color: AcademeTheme.appColor,
+                  child: CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
                       SliverToBoxAdapter(
                         child: ProgressSection(
                           height: height,
@@ -96,27 +123,31 @@ class OverviewScreenState extends State<OverviewScreen>
                             indicatorSize: TabBarIndicatorSize.tab,
                             labelStyle: TextStyle(fontSize: width * 0.045),
                             tabs: [
-                              Tab(
-                                  text: L10n.getTranslatedText(
-                                      context, 'Overview')),
+                              Tab(text: L10n.getTranslatedText(context, 'Overview')),
                               Tab(text: L10n.getTranslatedText(context, 'Q&A')),
                             ],
                           ),
                         ),
                       ),
-                    ];
-                  },
-                  body: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _model.hasSubtopicData
-                          ? LessonsSection(
-                              courseId: widget.courseId,
-                              topicId: widget.topicId,
-                              userProgress: _model.userProgress,
-                            )
-                          : const Center(child: CircularProgressIndicator()),
-                      const QSection(),
+                      SliverFillRemaining(
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _model.hasSubtopicData
+                                ? LessonsSection(
+                                    key: _lessonsSectionKey,
+                                    courseId: widget.courseId,
+                                    topicId: widget.topicId,
+                                    courseTitle: widget.courseTitle,
+                                    topicTitle: widget.topicTitle,
+                                    language: widget.language,
+                                    userProgress: _model.userProgress,
+                                  )
+                                : const Center(child: CircularProgressIndicator()),
+                            const QSection(),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),

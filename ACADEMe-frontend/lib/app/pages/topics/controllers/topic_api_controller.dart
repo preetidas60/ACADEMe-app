@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:ACADEMe/api_endpoints.dart';
+import 'package:ACADEMe/app/pages/topics/controllers/topic_cache_controller.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,19 +11,18 @@ class TopicApiController {
   factory TopicApiController() => _instance;
   TopicApiController._internal();
 
-  final String backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
   final FlutterSecureStorage storage = const FlutterSecureStorage();
 
   Future<List<Map<String, dynamic>>> fetchTopicsFromBackend(
-    String courseId,
-    String targetLanguage,
-  ) async {
+      String courseId,
+      String targetLanguage,
+      ) async {
     try {
       final token = await storage.read(key: 'access_token');
       if (token == null) throw Exception("No access token found");
 
       final response = await http.get(
-        Uri.parse('$backendUrl/api/courses/$courseId/topics/?target_language=$targetLanguage'),
+        ApiEndpoints.getUri(ApiEndpoints.courseTopics(courseId, targetLanguage)),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json; charset=UTF-8',
@@ -36,15 +36,25 @@ class TopicApiController {
         final prefs = await SharedPreferences.getInstance();
         prefs.setInt('total_topics_$courseId', data.length);
 
-        // Calculate progress for each topic
+        // Calculate progress for each topic AND cache topic details
         List<Map<String, dynamic>> allTopics = [];
+        final cacheController = TopicCacheController();
+
         for (var topic in data) {
           String topicId = topic["id"].toString();
           double progress = await _getTopicProgress(courseId, topicId);
+
+          // Cache individual topic details for later use
+          cacheController.cacheTopicDetails(courseId, topicId, targetLanguage, {
+            'title': topic["title"].toString(),
+            'description': topic["description"]?.toString() ?? "No description available.",
+          });
+
           allTopics.add({
             "id": topicId,
             "title": topic["title"].toString(),
-            "progress": progress * 100, // as percentage
+            "description": topic["description"]?.toString() ?? "No description available.",
+            "progress": progress * 100,
           });
         }
 

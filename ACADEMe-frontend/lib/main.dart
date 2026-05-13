@@ -1,3 +1,4 @@
+import 'package:ACADEMe/providers/progress_provider.dart';
 import 'package:ACADEMe/started/pages/animated_splash.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
@@ -5,6 +6,7 @@ import 'package:ACADEMe/services/study_time_tracker.dart'; // Add this import
 import 'package:ACADEMe/app/pages/courses/controllers/course_controller.dart'; // Add this import
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'app/pages/homepage/controllers/home_controller.dart';
 import 'firebase_options.dart';
 import 'dart:io';
 import 'app/auth/role.dart';
@@ -82,6 +84,10 @@ void main() async {
             create: (context) => BottomNavProvider()), // BottomNav provider
         ChangeNotifierProvider(
             create: (context) => CourseController()), // Course controller provider
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider(
+          create: (_) => ProgressProvider()
+        )
       ],
       child: const MyApp(),
     ),

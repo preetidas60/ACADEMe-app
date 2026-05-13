@@ -5,6 +5,8 @@ import 'package:ACADEMe/academe_theme.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:provider/provider.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
+import '../../../../providers/progress_provider.dart';
+import '../../courses/widgets/course_widgets.dart';
 import '../../topic_details/overview/screens/overview_screen.dart';
 import '../controllers/topic_cache_controller.dart';
 import '../controllers/app_lifecycle_controller.dart';
@@ -13,8 +15,13 @@ import '../widgets/topic_card.dart';
 
 class TopicViewScreen extends StatefulWidget {
   final String courseId;
+  final String courseTitle;
 
-  const TopicViewScreen({super.key, required this.courseId});
+  const TopicViewScreen({
+    super.key,
+    required this.courseId,
+    required this.courseTitle,
+  });
 
   @override
   State<TopicViewScreen> createState() => _TopicViewScreenState();
@@ -48,34 +55,43 @@ class _TopicViewScreenState extends State<TopicViewScreen>
     super.dispose();
   }
 
+  // Replace the _initializeTopics method with:
   Future<void> _initializeTopics() async {
     if (!mounted) return;
 
     final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
     final targetLanguage = languageProvider.locale.languageCode;
 
+    // Preload progress data once at the beginning
+    final progressProvider = ProgressProvider();
+    await progressProvider.preloadProgress(courseId: widget.courseId);
+
     // Try to get cached data first
     final cachedTopics = _cacheController.getCachedTopics(widget.courseId, targetLanguage);
 
-    if (cachedTopics != null && !_lifecycleController.isAppJustOpened) {
-      // Use cached data
-      setState(() {
-        _updateTopicsData(cachedTopics);
-        isLoading = false;
-      });
-      return;
-    }
-
-    // Load cached data immediately if available
     if (cachedTopics != null) {
+      // Always show cached data first for instant loading
       setState(() {
         _updateTopicsData(cachedTopics);
         isLoading = false;
       });
+
+      // Only fetch from backend if:
+      // 1. App just opened (cold start)
+      // 2. Cache is older than 15 minutes
+      // 3. User explicitly refreshes
+      if (_lifecycleController.isAppJustOpened ||
+          !_cacheController.hasCachedTopics(widget.courseId, targetLanguage)) {
+        await _fetchTopicsFromBackend(showRefreshIndicator: true);
+      } else {
+        // Just refresh progress from SharedPreferences
+        await _refreshTopicsProgressOnly();
+      }
+    } else {
+      // No cache available, must fetch from backend
+      await _fetchTopicsFromBackend(showRefreshIndicator: false);
     }
 
-    // Fetch fresh data from backend
-    await _fetchTopicsFromBackend(showRefreshIndicator: cachedTopics != null);
     _lifecycleController.markAsUsed();
   }
 
@@ -101,7 +117,6 @@ class _TopicViewScreenState extends State<TopicViewScreen>
 
       if (!mounted) return;
 
-      // Cache the fresh data
       _cacheController.cacheTopics(widget.courseId, targetLanguage, allTopics);
 
       setState(() {
@@ -142,6 +157,34 @@ class _TopicViewScreenState extends State<TopicViewScreen>
     }
   }
 
+  // Add this method to _TopicViewScreenState class
+  Future<void> _refreshTopicsProgressOnly() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final targetLanguage = languageProvider.locale.languageCode;
+
+    // Check if we should refresh progress (based on time elapsed)
+    if (_cacheController.shouldRefreshProgress(widget.courseId, targetLanguage)) {
+      // Refresh cached progress without API call
+      await _cacheController.refreshCachedTopicsProgress(widget.courseId, targetLanguage);
+
+      // Update UI with refreshed cached data
+      final updatedTopics = _cacheController.getCachedTopics(widget.courseId, targetLanguage);
+      if (updatedTopics != null && mounted) {
+        setState(() {
+          _updateTopicsData(updatedTopics);
+        });
+      }
+    } else {
+      // Data is fresh enough, just update UI with existing cache
+      final cachedTopics = _cacheController.getCachedTopics(widget.courseId, targetLanguage);
+      if (cachedTopics != null && mounted) {
+        setState(() {
+          _updateTopicsData(cachedTopics);
+        });
+      }
+    }
+  }
+
   void _updateTopicsData(List<Map<String, dynamic>> allTopics) {
     topics = allTopics;
     ongoingTopics = topics.where((t) => t["progress"] > 0 && t["progress"] < 100).toList();
@@ -154,12 +197,15 @@ class _TopicViewScreenState extends State<TopicViewScreen>
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final language = languageProvider.locale.languageCode;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: AcademeTheme.appColor,
         title: Text(
-          L10n.getTranslatedText(context, 'Topics'),
+          widget.courseTitle,
           style: const TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -203,9 +249,9 @@ class _TopicViewScreenState extends State<TopicViewScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildTopicList(topics),
-                  _buildTopicList(ongoingTopics),
-                  _buildTopicList(completedTopics),
+                  _buildTopicList(topics, language),
+                  _buildTopicList(ongoingTopics, language),
+                  _buildTopicList(completedTopics, language),
                 ],
               ),
             ),
@@ -228,11 +274,9 @@ class _TopicViewScreenState extends State<TopicViewScreen>
     );
   }
 
-  Widget _buildTopicList(List<Map<String, dynamic>> topicList) {
+  Widget _buildTopicList(List<Map<String, dynamic>> topicList, String language) {
     if (isLoading && topics.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AcademeTheme.appColor),
-      );
+      return _buildShimmerLoadingList();
     }
 
     if (topicList.isEmpty && !isLoading) {
@@ -284,19 +328,121 @@ class _TopicViewScreenState extends State<TopicViewScreen>
                 builder: (context) => OverviewScreen(
                   courseId: widget.courseId,
                   topicId: topicList[index]["id"],
+                  courseTitle: widget.courseTitle,
+                  topicTitle: topicList[index]["title"] ?? "Untitled Topic",
+                  language: language,
                 ),
               ),
-            ).then((_) {
-              // Refresh data when coming back from overviews
+            ).then((_) async {
+              // Update both progress and module completion for the specific topic
               final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-              final cachedTopics = _cacheController.getCachedTopics(widget.courseId, languageProvider.locale.languageCode);
-              if (cachedTopics != null) {
-                _fetchTopicsFromBackend(showRefreshIndicator: true);
-              }
+              final targetLanguage = languageProvider.locale.languageCode;
+              
+              // Update module completion for the specific topic
+              await _cacheController.updateTopicModuleCompletion(
+                widget.courseId, 
+                topicList[index]["id"], 
+                targetLanguage
+              );
+              
+              // Then refresh all topics progress
+              await _refreshTopicsProgressOnly();
             });
           },
         );
       },
     );
   }
+
+  Widget _buildShimmerLoadingList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: 6, // Show 6 shimmer cards
+      itemBuilder: (context, index) {
+        return ShimmerEffect(
+          child: _buildTopicCardShimmer(),
+        );
+      },
+    );
+  }
+
+  Widget _buildTopicCardShimmer() {
+    return Container(
+      height: 120,
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade300,
+            blurRadius: 5,
+            spreadRadius: 2,
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Title shimmer
+          Container(
+            height: 18,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 16,
+            width: MediaQuery.of(context).size.width * 0.7,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Progress bar shimmer
+          Container(
+            height: 6,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Bottom text shimmer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                height: 14,
+                width: 100,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              Container(
+                height: 14,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+// Import the existing ShimmerEffect from your widgets file
+// import 'path/to/your/shimmer_effect_widget.dart';

@@ -1,9 +1,9 @@
+import 'package:ACADEMe/api_endpoints.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ClassSelectionBottomSheet extends StatefulWidget {
   final VoidCallback onClassSelected;
@@ -126,8 +126,6 @@ class _ClassSelectionBottomSheetState extends State<ClassSelectionBottomSheet> {
   }
 
   Future<bool> _updateClassInBackend(String selectedClass) async {
-    final String backendUrl =
-        dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
     final String? token = await _secureStorage.read(key: 'access_token');
 
     if (token == null) {
@@ -139,7 +137,7 @@ class _ClassSelectionBottomSheetState extends State<ClassSelectionBottomSheet> {
 
     try {
       final response = await http.patch(
-        Uri.parse("$backendUrl/api/users/update_class/"),
+        ApiEndpoints.getUri(ApiEndpoints.updateClass),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -167,8 +165,6 @@ class _ClassSelectionBottomSheetState extends State<ClassSelectionBottomSheet> {
   }
 
   Future<bool> _reloginUser() async {
-    final String backendUrl =
-        dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
     final String? email = await _secureStorage.read(key: 'email');
     final String? password = await _secureStorage.read(key: 'password');
 
@@ -181,7 +177,7 @@ class _ClassSelectionBottomSheetState extends State<ClassSelectionBottomSheet> {
 
     try {
       final response = await http.post(
-        Uri.parse("$backendUrl/api/users/login"),
+        ApiEndpoints.getUri(ApiEndpoints.login),
         headers: {
           'Content-Type': 'application/json',
         },
