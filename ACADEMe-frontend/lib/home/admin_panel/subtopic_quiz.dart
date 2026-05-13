@@ -1,3 +1,4 @@
+import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,7 +16,8 @@ class SubTopicQuizScreen extends StatefulWidget {
   final String subtopicTitle;
   final String targetLanguage;
 
-  SubTopicQuizScreen({
+  const SubTopicQuizScreen({
+    super.key,
     required this.courseId,
     required this.topicId,
     required this.subtopicId,
@@ -27,10 +29,10 @@ class SubTopicQuizScreen extends StatefulWidget {
   });
 
   @override
-  _SubTopicQuizScreenState createState() => _SubTopicQuizScreenState();
+  SubTopicQuizScreenState createState() => SubTopicQuizScreenState();
 }
 
-class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
+class SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
   final _storage = FlutterSecureStorage();
   List<Map<String, dynamic>> quizQuestions = [];
   bool isLoading = true;
@@ -38,7 +40,7 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
   @override
   void initState() {
     super.initState();
-    print("📌 Quiz ID: ${widget.quizId}");
+    debugPrint("📌 Quiz ID: ${widget.quizId}");
     _fetchQuizQuestions();
   }
 
@@ -57,14 +59,16 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
         url,
         headers: {
           "Authorization": "Bearer $token",
-          "Content-Type": "application/json",
+          "Content-Type":
+              "application/json; charset=UTF-8", // Ensure UTF-8 encoding
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body); // Parse as List<dynamic>
+        final List<dynamic> data =
+            json.decode(utf8.decode(response.bodyBytes)); // Decode with UTF-8
         setState(() {
-          quizQuestions = data.cast<Map<String, dynamic>>(); // Cast to List<Map<String, dynamic>>
+          quizQuestions = data.cast<Map<String, dynamic>>();
           isLoading = false;
         });
       } else {
@@ -79,7 +83,8 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        final TextEditingController questionController = TextEditingController();
+        final TextEditingController questionController =
+            TextEditingController();
         List<TextEditingController> optionControllers = [
           TextEditingController(),
           TextEditingController(),
@@ -97,32 +102,33 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text("Add Quiz Question"),
+              title: Text(L10n.getTranslatedText(context, 'Add Quiz Question')),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: questionController,
-                      decoration: InputDecoration(labelText: "Question"),
+                      decoration: InputDecoration(labelText: L10n.getTranslatedText(context, 'Question')),
                     ),
                     ...List.generate(optionControllers.length, (index) {
                       return TextField(
                         controller: optionControllers[index],
-                        decoration: InputDecoration(labelText: "Option ${index + 1}"),
+                        decoration:
+                            InputDecoration(labelText: "${L10n.getTranslatedText(context, 'Option')} ${index + 1}"),
                       );
                     }),
                     if (optionControllers.length < 4)
                       TextButton(
                         onPressed: () => addOption(setDialogState),
-                        child: Text("Add Another Option"),
+                        child: Text(L10n.getTranslatedText(context, 'Add Another Option')),
                       ),
                     DropdownButtonFormField<int>(
                       value: correctOption,
                       items: List.generate(optionControllers.length, (index) {
                         return DropdownMenuItem<int>(
                           value: index,
-                          child: Text("Correct Option: ${index + 1}"),
+                          child: Text("${L10n.getTranslatedText(context, 'Correct Option')}: ${index + 1}"),
                         );
                       }),
                       onChanged: (value) {
@@ -137,24 +143,30 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text("Cancel"),
+                  child: Text(L10n.getTranslatedText(context, 'Cancel')),
                 ),
                 ElevatedButton(
                   onPressed: () async {
                     if (questionController.text.isNotEmpty &&
-                        optionControllers.every((controller) => controller.text.isNotEmpty)) {
+                        optionControllers.every(
+                            (controller) => controller.text.isNotEmpty)) {
                       final success = await _submitQuizQuestion(
                         question: questionController.text,
-                        options: optionControllers.map((controller) => controller.text).toList(),
+                        options: optionControllers
+                            .map((controller) => controller.text)
+                            .toList(),
                         correctOption: correctOption,
                       );
+                      if (!context.mounted) {
+                        return; // Now properly wrapped in a block
+                      }
                       if (success) {
                         Navigator.pop(context);
                         _fetchQuizQuestions();
                       }
                     }
                   },
-                  child: Text("Add"),
+                  child: Text(L10n.getTranslatedText(context, 'Add')),
                 ),
               ],
             );
@@ -183,20 +195,23 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
         url,
         headers: {
           "Authorization": "Bearer $token",
-          "Content-Type": "application/json",
+          "Content-Type":
+              "application/json; charset=UTF-8", // Ensure UTF-8 encoding
         },
         body: json.encode({
-          "title": "New Quiz", // Adding the required title field
-          "question_text": question, // Updated key to match API
+          "title": "New Quiz",
+          "question_text": question,
           "options": options,
           "correct_option": correctOption,
-          "target_language": widget.targetLanguage, // Include target_language
+          "target_language": widget.targetLanguage,
         }),
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = json.decode(response.body);
-        print("✅ Quiz question added successfully: ${responseData["message"]}");
+        final responseData =
+            json.decode(utf8.decode(response.bodyBytes)); // Decode with UTF-8
+        debugPrint(
+            "✅ Quiz question added successfully: ${responseData["message"]}");
         return true;
       } else {
         _showError("❌ Failed to add quiz question: ${response.body}");
@@ -212,7 +227,7 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-    print(message);
+    debugPrint(message);
   }
 
   @override
@@ -230,56 +245,60 @@ class _SubTopicQuizScreenState extends State<SubTopicQuizScreen> {
         child: isLoading
             ? Center(child: CircularProgressIndicator())
             : quizQuestions.isEmpty
-            ? Center(child: Text("No quiz questions added yet."))
-            : ListView.builder(
-          itemCount: quizQuestions.length,
-          itemBuilder: (context, index) {
-            final question = quizQuestions[index];
-            final options = question["options"] as List<dynamic>? ?? []; // Handle null options
-            return Card(
-              margin: EdgeInsets.symmetric(vertical: 8),
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "${index + 1}. ${question["question_text"]}", // Updated key to match API
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    Column(
-                      children: options.asMap().entries.map((entry) {
-                        final idx = entry.key;
-                        final optionText = entry.value.toString();
-                        return Container(
-                          margin: EdgeInsets.symmetric(vertical: 4),
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: question["correct_option"] == idx
-                                ? Colors.green.withOpacity(0.2)
-                                : Colors.grey.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
+                ? Center(child: Text(L10n.getTranslatedText(context, 'No quiz questions added yet.')))
+                : ListView.builder(
+                    itemCount: quizQuestions.length,
+                    itemBuilder: (context, index) {
+                      final question = quizQuestions[index];
+                      final options =
+                          question["options"] as List<dynamic>? ?? [];
+                      return Card(
+                        margin: EdgeInsets.symmetric(vertical: 8),
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("${idx + 1}) ", style: TextStyle(fontWeight: FontWeight.bold)),
-                              Expanded(child: Text(optionText)),
+                              Text(
+                                "${index + 1}. ${question["question_text"]}",
+                                style: TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Column(
+                                children: options.asMap().entries.map((entry) {
+                                  final idx = entry.key;
+                                  final optionText = entry.value.toString();
+                                  return Container(
+                                    margin: EdgeInsets.symmetric(vertical: 4),
+                                    padding: EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: question["correct_option"] == idx
+                                          ? Colors.green.withValues()
+                                          : Colors.grey.withValues(),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text("${idx + 1}) ",
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold)),
+                                        Expanded(child: Text(optionText)),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
                             ],
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
+                        ),
+                      );
+                    },
+                  ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addQuizQuestion,

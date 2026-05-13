@@ -1,3 +1,24 @@
+import os
+import base64
+from pathlib import Path
+
+# Firebase credentials setup - Runs BEFORE any other imports
+FIREBASE_CREDENTIALS_PATH = Path("firebase/firebase_service_account.json")
+
+# Check if running in Railway production environment
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    encoded_creds = os.getenv("FIREBASE_CREDENTIALS_BASE64")
+    if not encoded_creds:
+        raise ValueError("🚨 Missing FIREBASE_CREDENTIALS_BASE64 environment variable")
+
+    # Decode and write credentials file
+    decoded_creds = base64.b64decode(encoded_creds)
+    FIREBASE_CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(FIREBASE_CREDENTIALS_PATH, "wb") as creds_file:
+        creds_file.write(decoded_creds)
+    print("✅ Firebase credentials file created successfully")
+
+# Now import FastAPI and routes
 from fastapi import FastAPI, File, UploadFile, Form
 from routes import users, courses, topics, quizzes, discussions, student_progress, ai_recommendations, progress_visuals
 from agents.text_agent import process_text
@@ -133,4 +154,5 @@ def home():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=True)

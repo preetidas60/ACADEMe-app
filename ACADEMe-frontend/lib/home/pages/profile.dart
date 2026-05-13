@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,20 +7,20 @@ import 'package:ACADEMe/academe_theme.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
 import 'package:ACADEMe/started/pages/login_view.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../widget/profile_class.dart';
+import '../../widget/profile_dropdown.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  _ProfilePageState createState() => _ProfilePageState();
+  ProfilePageState createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class ProfilePageState extends State<ProfilePage> {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   late Locale _selectedLocale;
-  String selectedClass = 'Class 1';
+  String? selectedClass; // Allow null initially
   Map<String, dynamic>? userDetails;
   bool isLoading = true;
 
@@ -30,6 +29,13 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _selectedLocale = const Locale('en');
     _loadLanguage();
+    _loadUserDetailsFromStorage(); // Load user details when the page is initialized
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload user details when the page is revisited
     _loadUserDetailsFromStorage();
   }
 
@@ -48,12 +54,12 @@ class _ProfilePageState extends State<ProfilePage> {
             'student_class': studentClass,
             'photo_url': photoUrl,
           };
-          selectedClass = 'Class ${studentClass ?? '1'}';
+          selectedClass = studentClass ?? 'SELECT'; // Use 'SELECT' as default
           isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading user details from storage: $e');
+      debugPrint('Error loading user details from storage: $e');
       if (mounted) {
         setState(() {
           isLoading = false;
@@ -68,55 +74,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _updateClass(String newClass) async {
-    try {
-      final accessToken = await _secureStorage.read(key: 'access_token');
-
-      if (accessToken == null) {
-        throw Exception('Access token not found');
-      }
-
-      final backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
-      final response = await http.patch(
-        Uri.parse('$backendUrl/api/users/update_class/'),
-        headers: {
-          'accept': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({'new_class': newClass}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            selectedClass = 'Class ${data['new_class']}';
-          });
-          await _secureStorage.write(key: 'student_class', value: data['new_class']);
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message']),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        throw Exception('Failed to update class: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error updating class: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update class: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _loadLanguage() async {
     final prefs = await SharedPreferences.getInstance();
     final langCode = prefs.getString('language') ?? 'en';
@@ -124,7 +81,11 @@ class _ProfilePageState extends State<ProfilePage> {
     final newLocale = Locale(langCode);
 
     Future.microtask(() {
-      final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+      if (!mounted) {
+        return; // Ensure widget is still active before using context
+      }
+      final languageProvider =
+          Provider.of<LanguageProvider>(context, listen: false);
       if (languageProvider.locale != newLocale) {
         languageProvider.setLocale(newLocale);
       }
@@ -142,9 +103,27 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('language', locale.languageCode);
+      if (!mounted) {
+        return; // Ensure widget is still active before using context
+      }
 
       Provider.of<LanguageProvider>(context, listen: false).setLocale(locale);
     }
+  }
+
+  Future<void> showLanguageSelectionSheet(BuildContext context,
+      Locale currentLocale, Function(Locale) onSelected) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => LanguageSelectionBottomSheet(
+        selectedLocale: currentLocale,
+        onLanguageSelected: onSelected,
+      ),
+    );
   }
 
   @override
@@ -181,9 +160,12 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 15),
             CircleAvatar(
               radius: 50,
-              backgroundImage: userDetails?['photo_url'] != null && userDetails!['photo_url'].isNotEmpty
-                  ? NetworkImage(userDetails!['photo_url']) // Use the provided photo URL
-                  : const AssetImage('assets/design_course/userImage.png') as ImageProvider, // Fallback to a local asset
+              backgroundImage: userDetails?['photo_url'] != null &&
+                      userDetails!['photo_url'].isNotEmpty
+                  ? NetworkImage(
+                      userDetails!['photo_url']) // Use the provided photo URL
+                  : const AssetImage('assets/design_course/userImage.png')
+                      as ImageProvider, // Fallback to a local asset
             ),
             const SizedBox(height: 10),
             Text(
@@ -206,7 +188,8 @@ class _ProfilePageState extends State<ProfilePage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.yellow,
                 foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(30),
                 ),
@@ -219,204 +202,132 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ListView(
-                  padding: const EdgeInsets.all(10),
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    ListTile(
-                      leading: const Icon(
-                        Icons.class_outlined,
-                        color: Colors.blue,
-                        size: 30,
+            const SizedBox(height: 5),
+            ListView(
+              padding: const EdgeInsets.all(10),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
                       ),
-                      title: const Text(
-                        "Class",
-                        style: TextStyle(fontSize: 20),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 0),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedClass,
-                            icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
-                            onChanged: (value) {
-                              if (value != selectedClass) {
-                                showDialog(
-                                  context: context,
-                                  barrierDismissible: false,
-                                  builder: (BuildContext context) {
-                                    return AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      title: const Text(
-                                        'Are you sure you want to change your class?',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                                      ),
-                                      content: const Text(
-                                        'All your progress data will be erased for this class.\nYou will need to relogin to start your journey with a new Class',
-                                        style: TextStyle(fontSize: 16),
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                          },
-                                          child: const Text(
-                                            'Cancel',
-                                            style: TextStyle(color: Colors.grey, fontSize: 16),
-                                          ),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            if (value != null) {
-                                              setState(() {
-                                                selectedClass = value!;
-                                              });
-                                              _updateClass(value!.replaceAll('Class ', ''));
-                                              Navigator.of(context).pop();
-                                            }
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.red,
-                                            foregroundColor: Colors.white,
-                                          ),
-                                          child: const Text('Yes'),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-                              }
-                            },
-                            items: List.generate(12, (index) => DropdownMenuItem(
-                              value: 'Class ${index + 1}',
-                              child: Text('${index + 1}'),
-                            )),
+                      builder: (context) {
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.of(context).viewInsets.bottom,
                           ),
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 15),
-                    ),
-                    _ProfileOption(
-                      icon: Icons.settings,
-                      text: L10n.getTranslatedText(context, 'Settings'),
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        print('Settings tapped');
-                      },
-                    ),
-                    _ProfileOption(
-                      icon: Icons.credit_card,
-                      text: L10n.getTranslatedText(context, 'Billing Details'),
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        print('Billing Details tapped');
-                      },
-                    ),
-                    _ProfileOption(
-                      icon: Icons.people,
-                      text: L10n.getTranslatedText(context, 'User Management'),
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        print('User Management tapped');
-                      },
-                    ),
-                    _ProfileOption(
-                      icon: Icons.info,
-                      text: L10n.getTranslatedText(context, 'Information'),
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        print('Information tapped');
-                      },
-                    ),
-                    _ProfileOption(
-                      icon: Icons.card_giftcard,
-                      text: L10n.getTranslatedText(context, 'Redeem Points'),
-                      iconColor: Colors.blue,
-                      onTap: () {
-                        print('Redeem points tapped');
-                      },
-                    ),
-                    _ProfileOption(
-                      icon: Icons.logout,
-                      text: L10n.getTranslatedText(context, 'Logout'),
-                      iconColor: Colors.red,
-                      onTap: () async {
-                        try {
-                          await AuthService().signOut();
-                          print('✅ User signed out successfully');
-
-                          if (mounted) {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(builder: (context) => const LogInView()),
-                                  (route) => false,
-                            );
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  L10n.getTranslatedText(context, 'You have been logged out'),
-                                ),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          print('❌ Error during logout: $e');
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        L10n.getTranslatedText(context, 'Select Language'),
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Consumer<LanguageProvider>(
-                        builder: (context, provider, child) {
-                          return DropdownButton<Locale>(
-                            value: provider.locale,
-                            hint: const Text("Choose Language"),
-                            isExpanded: true,
-                            onChanged: (Locale? newLocale) {
-                              if (newLocale != null) {
-                                _changeLanguage(newLocale);
-                              }
+                          child: ClassSelectionBottomSheet(
+                            onClassSelected: () {
+                              // Reload user details when the class is updated
+                              _loadUserDetailsFromStorage();
                             },
-                            items: L10n.supportedLocales.map((Locale locale) {
-                              return DropdownMenuItem(
-                                value: locale,
-                                child: Text(L10n.getLanguageName(locale.languageCode)),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: ReusableProfileOption(
+                    icon: Icons.class_outlined,
+                    title: L10n.getTranslatedText(context, 'Class'),
+                    trailingWidget: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          selectedClass ?? 'SELECT',
+                          style: const TextStyle(
+                              fontSize: 16, color: Colors.black),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_drop_down, color: Colors.black),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                GestureDetector(
+                  onTap: () {
+                    showLanguageSelectionSheet(
+                      context,
+                      Provider.of<LanguageProvider>(context, listen: false)
+                          .locale,
+                      (Locale newLocale) {
+                        _changeLanguage(newLocale);
+                      },
+                    );
+                  },
+                  child: ReusableProfileOption(
+                    icon: Icons.translate,
+                    title: L10n.getTranslatedText(context, 'language'),
+                    trailingWidget: Icon(Icons.arrow_forward_ios,
+                        size: 18, color: Colors.grey[500]),
+                  ),
+                ),
+                ProfileOption(
+                  icon: Icons.settings,
+                  text: L10n.getTranslatedText(context, 'Settings'),
+                  iconColor: AcademeTheme.appColor,
+                  onTap: () {},
+                ),
+                ProfileOption(
+                  icon: Icons.credit_card,
+                  text: L10n.getTranslatedText(context, 'Billing Details'),
+                  iconColor: AcademeTheme.appColor,
+                  onTap: () {},
+                ),
+                ProfileOption(
+                  icon: Icons.info,
+                  text: L10n.getTranslatedText(context, 'Information'),
+                  iconColor: AcademeTheme.appColor,
+                  onTap: () {},
+                ),
+                ProfileOption(
+                  icon: Icons.card_giftcard,
+                  text: L10n.getTranslatedText(context, 'Redeem Me Points'),
+                  iconColor: AcademeTheme.appColor,
+                  onTap: () {},
+                ),
+                ProfileOption(
+                  icon: Icons.logout,
+                  text: L10n.getTranslatedText(context, 'Logout'),
+                  iconColor: Colors.red,
+                  onTap: () async {
+                    try {
+                      await AuthService().signOut();
+                      debugPrint('✅ User signed out successfully');
+                      if (!context.mounted) {
+                        return; // Now properly wrapped in a block
+                      }
+
+                      if (mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const LogInView()),
+                          (route) => false,
+                        );
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              L10n.getTranslatedText(
+                                  context, 'You have been logged out'),
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      debugPrint('❌ Error during logout: $e');
+                    }
+                  },
+                  showTrailing: false,
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
             const SizedBox(height: 30),
           ],
@@ -426,43 +337,106 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
-class _ProfileOption extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final Color? iconColor;
-  final VoidCallback onTap;
+class LanguageSelectionBottomSheet extends StatefulWidget {
+  final Locale selectedLocale;
+  final Function(Locale) onLanguageSelected;
 
-  const _ProfileOption({
-    required this.icon,
-    required this.text,
-    required this.onTap,
-    this.iconColor,
+  const LanguageSelectionBottomSheet({
     super.key,
+    required this.selectedLocale,
+    required this.onLanguageSelected,
   });
 
   @override
+  LanguageSelectionBottomSheetState createState() =>
+      LanguageSelectionBottomSheetState();
+}
+
+class LanguageSelectionBottomSheetState
+    extends State<LanguageSelectionBottomSheet> {
+  Locale? _selectedLocale;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLocale = widget.selectedLocale;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: iconColor ?? AcademeTheme.appColor,
-          size: 30,
-        ),
-        title: Text(
-          text,
-          style: const TextStyle(fontSize: 20),
-        ),
-        trailing: GestureDetector(
-          onTap: onTap,
-          child: const Icon(
-            Icons.arrow_forward_ios,
-            size: 20,
-            color: Colors.grey,
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "Select Language",
+            style:
+                TextStyle(fontSize: width * 0.045, fontWeight: FontWeight.bold),
           ),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          SizedBox(height: height * 0.02),
+          DropdownButtonFormField<Locale>(
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey[200],
+              contentPadding: EdgeInsets.symmetric(
+                  horizontal: width * 0.03, vertical: height * 0.01),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            value: _selectedLocale,
+            items: L10n.supportedLocales.map((Locale locale) {
+              return DropdownMenuItem(
+                value: locale,
+                child: Text(L10n.getLanguageName(locale.languageCode)),
+              );
+            }).toList(),
+            onChanged: (Locale? locale) {
+              setState(() {
+                _selectedLocale = locale;
+              });
+            },
+          ),
+          SizedBox(height: height * 0.02),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 12), // Outer padding
+            child: SizedBox(
+              width: double.infinity, // Full width
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.yellow,
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 14), // Only vertical padding inside button
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  if (_selectedLocale != null) {
+                    widget.onLanguageSelected(_selectedLocale!);
+                    Navigator.pop(context); // Close sheet
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please select a language')),
+                    );
+                  }
+                },
+                child: Text(
+                  "Confirm",
+                  style: TextStyle(fontSize: width * 0.04, color: Colors.black),
+                ),
+              ),
+            ),
+          )
+        ],
       ),
     );
   }

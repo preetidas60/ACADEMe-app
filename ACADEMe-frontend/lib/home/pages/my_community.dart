@@ -1,7 +1,8 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import '../../academe_theme.dart';
-import 'package:ACADEMe/home/components/ASKMe_button.dart';
-import 'package:ACADEMe/home/pages/ASKMe.dart';
+import 'package:ACADEMe/home/components/askme_button.dart';
+import 'package:ACADEMe/home/pages/ask_me.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 
 class Mycommunity extends StatelessWidget {
@@ -9,12 +10,13 @@ class Mycommunity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AutoSizeGroup tabTextGroup = AutoSizeGroup();
     return ASKMeButton(
       showFAB: true, // Show floating action button
       onFABPressed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ASKMe()),
+          MaterialPageRoute(builder: (context) => AskMe()),
         );
       },
       child: DefaultTabController(
@@ -66,7 +68,7 @@ class Mycommunity extends StatelessWidget {
                     borderRadius: BorderRadius.circular(30),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
+                        color: Colors.grey.withAlpha(20),
                         blurRadius: 5,
                         spreadRadius: 1,
                         offset: const Offset(0, 2),
@@ -95,13 +97,14 @@ class Mycommunity extends StatelessWidget {
               Container(
                 color: Colors.white,
                 child: TabBar(
-                  indicatorColor: Colors.black,
-                  labelColor: Colors.black,
+                  indicatorColor: Colors.blue,
+                  labelColor: Colors.blue,
                   unselectedLabelColor: Colors.black,
+                  indicatorSize: TabBarIndicatorSize.tab,
                   tabs: [
-                    Tab(text: L10n.getTranslatedText(context, 'Forums')),
-                    Tab(text: L10n.getTranslatedText(context, 'Groups')),
-                    Tab(text: L10n.getTranslatedText(context, 'Communities')),
+                    _buildSynchronizedTab(context, 'Forums', tabTextGroup),
+                    _buildSynchronizedTab(context, 'Groups', tabTextGroup),
+                    _buildSynchronizedTab(context, 'Communities', tabTextGroup),
                   ],
                 ),
               ),
@@ -122,6 +125,19 @@ class Mycommunity extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildSynchronizedTab(BuildContext context, String labelKey, AutoSizeGroup group) {
+  return Tab(
+    child: AutoSizeText(
+      L10n.getTranslatedText(context, labelKey),
+      maxLines: 1,
+      group: group, // Ensures all tabs shrink together
+      style: TextStyle(fontSize: 16),
+      minFontSize: 12, // Prevents text from becoming unreadable
+      textAlign: TextAlign.center,
+    ),
+  );
 }
 
 class CommunityList extends StatelessWidget {

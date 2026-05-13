@@ -1,4 +1,6 @@
 import 'package:ACADEMe/academe_theme.dart';
+import 'package:ACADEMe/localization/l10n.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -19,15 +21,15 @@ import 'package:ACADEMe/widget/audio_payer_widget.dart';
 import 'package:ACADEMe/widget/full_screen_video.dart';
 import 'package:ACADEMe/widget/typing_indicator.dart';
 
-class ASKMe extends StatefulWidget {
+class AskMe extends StatefulWidget {
   String? initialMessage;
-  ASKMe({Key? key, this.initialMessage}) : super(key: key);
+  AskMe({super.key, this.initialMessage});
 
   @override
-  _ASKMeState createState() => _ASKMeState();
+  AskMeState createState() => AskMeState();
 }
 
-class _ASKMeState extends State<ASKMe> {
+class AskMeState extends State<AskMe> {
   final ScrollController _scrollController = ScrollController();
   String selectedLanguage = "en"; // Default: English
   List<Map<String, dynamic>> chatMessages = [];
@@ -40,7 +42,7 @@ class _ASKMeState extends State<ASKMe> {
   bool isConverting = false; // To track the loading state
 
   final GlobalKey<ScaffoldState> _scaffoldKey =
-  GlobalKey<ScaffoldState>(); // Key for the drawer
+      GlobalKey<ScaffoldState>(); // Key for the drawer
 
   String searchQuery = "";
   List<Map<String, String>> languages = [
@@ -53,19 +55,6 @@ class _ASKMeState extends State<ASKMe> {
     {'name': 'Japanese', 'code': 'ja'},
     {'name': 'Bengali', 'code': 'bn'},
   ];
-
-  List<Map<String, String>> _getFilteredLanguages() {
-    if (searchQuery.isEmpty) {
-      return languages; // If search query is empty, show all languages
-    } else {
-      return languages
-          .where((language) => language['name']!
-          .toLowerCase()
-          .contains(searchQuery.toLowerCase()))
-          .toList(); // Filter the languages based on the search query
-    }
-  }
-
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -76,14 +65,20 @@ class _ASKMeState extends State<ASKMe> {
     }
   }
 
+  void _startNewChat() {
+    setState(() {
+      chatMessages.clear(); // Clear all messages
+      _textController.clear(); // Clear any text input
+      _isRecording = false; // Stop any ongoing recording
+      _timer?.cancel(); // Cancel recording timer if active
+      _seconds = 0; // Reset recording timer
+    });
+  }
+
   // For the chat history
-  List<ChatSession> chatHistory = [
-    ChatSession(title: "Chat with AI", timestamp: "Feb 22, 2025"),
-    ChatSession(title: "Math Help", timestamp: "Feb 21, 2025"),
-  ];
 
   void _loadChatSession(ChatSession chat) {
-    print("Selected chat: ${chat.title}");
+    debugPrint("Selected chat: ${chat.title}");
   }
 
   @override
@@ -104,7 +99,7 @@ class _ASKMeState extends State<ASKMe> {
   Future<void> _initRecorder() async {
     bool hasPermission = await _audioRecorder.hasPermission();
     if (!hasPermission) {
-      print("Recording permission not granted.");
+      debugPrint("Recording permission not granted.");
     }
   }
 
@@ -123,7 +118,7 @@ class _ASKMeState extends State<ASKMe> {
               leading: Icon(Icons.attach_file),
               title: Text(file.path.split('/').last),
               subtitle:
-              Text("${(file.lengthSync() / 1024).toStringAsFixed(1)}KB"),
+                  Text("${(file.lengthSync() / 1024).toStringAsFixed(1)}KB"),
             ),
             TextField(
               controller: promptController,
@@ -171,21 +166,21 @@ class _ASKMeState extends State<ASKMe> {
         type = FileType.audio;
         break;
       default:
-        print("❌ Invalid file type.");
+        debugPrint("❌ Invalid file type.");
         return;
     }
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: type,
       allowedExtensions:
-      (type == FileType.custom) ? allowedExtensions : null, // ✅ Fix
+          (type == FileType.custom) ? allowedExtensions : null, // ✅ Fix
     );
 
     if (result != null && result.files.single.path != null) {
       File file = File(result.files.single.path!);
       _showPromptDialog(file, fileType);
     } else {
-      print("❌ File selection canceled.");
+      debugPrint("❌ File selection canceled.");
     }
   }
 
@@ -204,7 +199,7 @@ class _ASKMeState extends State<ASKMe> {
     String fileFieldName = (fileType == 'Image') ? 'image' : 'file';
     String? mimeType = lookupMimeType(file.path);
     mimeType ??=
-    (fileType == 'Video') ? 'video/mp4' : 'application/octet-stream';
+        (fileType == 'Video') ? 'video/mp4' : 'application/octet-stream';
 
     request.files.add(await http.MultipartFile.fromPath(
       fileFieldName,
@@ -282,23 +277,23 @@ class _ASKMeState extends State<ASKMe> {
 
       if (path != null) {
         File file = File(path);
-        print(
+        debugPrint(
             "Audio file path: $path, Size: ${file.existsSync() ? file.lengthSync() : 'File not found'} bytes");
 
         if (file.existsSync()) {
-          print("File exists, uploading...");
+          debugPrint("File exists, uploading...");
           await _uploadSpeech(file);
         } else {
-          print("File does NOT exist. Path: $path");
+          debugPrint("File does NOT exist. Path: $path");
         }
       } else {
-        print("Recording path is null.");
+        debugPrint("Recording path is null.");
       }
     } else {
       // Request microphone permission
       PermissionStatus micStatus = await Permission.microphone.request();
       if (!micStatus.isGranted) {
-        print("Microphone permission not granted.");
+        debugPrint("Microphone permission not granted.");
 
         return;
       }
@@ -310,7 +305,7 @@ class _ASKMeState extends State<ASKMe> {
 
       try {
         // Start recording with WAV format
-        print("Starting recording at path: $filePath");
+        debugPrint("Starting recording at path: $filePath");
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.wav), // WAV format
           path: filePath,
@@ -328,7 +323,7 @@ class _ASKMeState extends State<ASKMe> {
           });
         });
       } catch (e) {
-        print("Error starting recording: $e");
+        debugPrint("Error starting recording: $e");
       }
     }
   }
@@ -337,10 +332,10 @@ class _ASKMeState extends State<ASKMe> {
   Future<void> _uploadSpeech(File file) async {
     try {
       if (!file.existsSync() || file.lengthSync() == 0) {
-        print("❌ File does not exist or is empty.");
+        debugPrint("❌ File does not exist or is empty.");
         return;
       }
-      print("File size: ${file.lengthSync()} bytes");
+      debugPrint("File size: ${file.lengthSync()} bytes");
 
       setState(() {
         isConverting = true;
@@ -354,17 +349,17 @@ class _ASKMeState extends State<ASKMe> {
 
       // Ensure the selected language is not empty
       selectedLanguage = selectedLanguage.isNotEmpty ? selectedLanguage : "hi";
-      print("Selected target language: $selectedLanguage");
+      debugPrint("Selected target language: $selectedLanguage");
 
       request.fields.addAll({
         'prompt': 'इस ऑडियो को हिंदी में लिखो',
         'source_lang': 'auto', // Let the server detect the source language
         'target_lang':
-        selectedLanguage, // Send the selected language for the response
+            selectedLanguage, // Send the selected language for the response
       });
 
-      final mimeType = lookupMimeType(file.path) ?? "audio/wav";
-      print("Detected MIME type: $mimeType");
+      final mimeType = lookupMimeType(file.path) ?? "audio/flac";
+      debugPrint("Detected MIME type: $mimeType");
 
       request.files.add(await http.MultipartFile.fromPath(
         'file',
@@ -375,31 +370,31 @@ class _ASKMeState extends State<ASKMe> {
       var response = await request.send();
       String responseBody = await response.stream.bytesToString();
 
-      print("Server response: $responseBody");
+      debugPrint("Server response: $responseBody");
 
       if (response.statusCode == 200) {
-        print("✅ Audio uploaded successfully!");
+        debugPrint("✅ Audio uploaded successfully!");
 
         var decodedResponse = jsonDecode(responseBody);
 
         // Fix: Extract detected language correctly
         String detectedLang = decodedResponse['language'] ?? 'unknown';
-        print("Detected Language: $detectedLang");
+        debugPrint("Detected Language: $detectedLang");
 
         // If the detected language is Hindi and user hasn't explicitly chosen another language
         if (detectedLang == 'hi' && selectedLanguage == "auto") {
           setState(() {
             selectedLanguage =
-            'hi'; // Update language to Hindi if detected language is Hindi
+                'hi'; // Update language to Hindi if detected language is Hindi
           });
-          print("✅ Updated selected language to Hindi");
+          debugPrint("✅ Updated selected language to Hindi");
         }
 
         // Proceed with handling the server response (your AI response)
         await _handleServerResponse(decodedResponse);
       } else {
-        print("❌ Upload failed with status: ${response.statusCode}");
-        print("Server response: $responseBody");
+        debugPrint("❌ Upload failed with status: ${response.statusCode}");
+        debugPrint("Server response: $responseBody");
 
         setState(() {
           chatMessages.add({
@@ -409,7 +404,7 @@ class _ASKMeState extends State<ASKMe> {
         });
       }
     } catch (e) {
-      print("❌ Error uploading audio: $e");
+      debugPrint("❌ Error uploading audio: $e");
       setState(() {
         chatMessages.add({
           "role": "assistant",
@@ -432,10 +427,10 @@ class _ASKMeState extends State<ASKMe> {
         // Update the input field with the 'text' part of the response
         _textController.text = responseText;
       } else {
-        print("❌ No text key in server response");
+        debugPrint("❌ No text key in server response");
       }
     } catch (e) {
-      print("❌ Error handling server response: $e");
+      debugPrint("❌ Error handling server response: $e");
     }
   }
 
@@ -443,7 +438,7 @@ class _ASKMeState extends State<ASKMe> {
   void _sendMessage(String message) async {
     setState(() {
       chatMessages.add({"role": "user", "text": message});
-      chatMessages.add({"role": "ai", "text": "..."}); // Placeholder
+      chatMessages.add({"role": "ai", "isTyping": true}); // Typing Indicator
     });
 
     Future.delayed(Duration(milliseconds: 100), () {
@@ -454,7 +449,8 @@ class _ASKMeState extends State<ASKMe> {
       );
     });
 
-    var url = Uri.parse('${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/process_text');
+    var url = Uri.parse(
+        '${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/process_text');
 
     try {
       var response = await http.post(
@@ -470,7 +466,8 @@ class _ASKMeState extends State<ASKMe> {
         setState(() {
           chatMessages[chatMessages.length - 1] = {
             "role": "ai",
-            "text": aiMessage
+            "text": aiMessage,
+            "isTyping": false
           };
         });
 
@@ -485,7 +482,8 @@ class _ASKMeState extends State<ASKMe> {
         setState(() {
           chatMessages[chatMessages.length - 1] = {
             "role": "ai",
-            "text": "Oops! Something went wrong. Please try again."
+            "text": "Oops! Something went wrong. Please try again.",
+            "isTyping": false
           };
         });
       }
@@ -493,7 +491,9 @@ class _ASKMeState extends State<ASKMe> {
       setState(() {
         chatMessages[chatMessages.length - 1] = {
           "role": "ai",
-          "text": "Error connecting to the server. Please check your internet connection."
+          "text":
+              "Error connecting to the server. Please check your internet connection.",
+          "isTyping": false
         };
       });
     }
@@ -501,7 +501,7 @@ class _ASKMeState extends State<ASKMe> {
 
   void _showLanguageSelection() {
     showModalBottomSheet(
-      context: this.context,
+      context: context,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -512,8 +512,8 @@ class _ASKMeState extends State<ASKMe> {
           builder: (context, setModalState) {
             List<Map<String, String>> filteredLanguages = languages
                 .where((language) => language['name']!
-                .toLowerCase()
-                .startsWith(searchQuery.toLowerCase()))
+                    .toLowerCase()
+                    .startsWith(searchQuery.toLowerCase()))
                 .toList();
 
             return Padding(
@@ -522,7 +522,7 @@ class _ASKMeState extends State<ASKMe> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    "Select Output Language",
+                    L10n.getTranslatedText(context, 'Select Output Language'),
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Divider(),
@@ -530,7 +530,8 @@ class _ASKMeState extends State<ASKMe> {
                   // Search bar with live filtering
                   TextField(
                     decoration: InputDecoration(
-                      labelText: 'Search Languages',
+                      labelText:
+                          L10n.getTranslatedText(context, 'Search Languages'),
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.search),
                     ),
@@ -567,46 +568,68 @@ class _ASKMeState extends State<ASKMe> {
 
   @override
   Widget build(BuildContext context) {
+    List<ChatSession> chatHistory = [
+      ChatSession(
+          title: L10n.getTranslatedText(context, 'Chat with AI'),
+          timestamp: "Feb 22, 2025"),
+      ChatSession(
+          title: L10n.getTranslatedText(context, 'Math Help'),
+          timestamp: "Feb 21, 2025"),
+    ];
+
     return Scaffold(
       key: _scaffoldKey, // Attach key to control drawer
       appBar: AppBar(
         backgroundColor: AcademeTheme.appColor,
         elevation: 2,
         iconTheme: IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: Icon(Icons.menu,
-              size: 28, color: Colors.white), // Custom hamburger icon
-          onPressed: () {
-            _scaffoldKey.currentState?.openDrawer(); // Open the drawer
-          },
-        ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                'ASKMe',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(icon: newChatIcon(), onPressed: () {}),
-                IconButton(
-                  icon: Icon(Icons.translate, size: 28, color: Colors.white),
+        automaticallyImplyLeading:
+            false, // Removes the reserved space for the menu
+        title: SizedBox(
+          height: kToolbarHeight, // Ensures full height usage
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: Icon(Icons.menu,
+                      size: 28, color: Colors.white), // Custom menu icon
                   onPressed: () {
-                    _showLanguageSelection();
+                    _scaffoldKey.currentState?.openDrawer(); // Open the drawer
                   },
                 ),
-              ],
-            ),
-          ],
+              ),
+              Center(
+                child: Text(
+                  'ASKMe',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: newChatIcon(),
+                      onPressed: _startNewChat, // Use the new function here
+                    ),
+                    IconButton(
+                      icon:
+                          Icon(Icons.translate, size: 28, color: Colors.white),
+                      onPressed: () {
+                        _showLanguageSelection();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
 
@@ -631,7 +654,7 @@ class _ASKMeState extends State<ASKMe> {
           padding: EdgeInsets.all(10),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: 40,
                 height: 40,
                 child: IconButton(
@@ -642,7 +665,7 @@ class _ASKMeState extends State<ASKMe> {
                       context: context,
                       shape: RoundedRectangleBorder(
                         borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
+                            BorderRadius.vertical(top: Radius.circular(20)),
                       ),
                       builder: (BuildContext context) {
                         return Padding(
@@ -650,22 +673,30 @@ class _ASKMeState extends State<ASKMe> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildAttachmentOption(context, Icons.image,
-                                  "Image", Colors.blue, 'Image'),
+                              _buildAttachmentOption(
+                                  context,
+                                  Icons.image,
+                                  L10n.getTranslatedText(context, 'Image'),
+                                  Colors.blue,
+                                  'Image'),
                               _buildAttachmentOption(
                                   context,
                                   Icons.insert_drive_file,
-                                  "Document",
+                                  L10n.getTranslatedText(context, 'Document'),
                                   Colors.green,
                                   'Document'),
                               _buildAttachmentOption(
                                   context,
                                   Icons.video_library,
-                                  "Video",
+                                  L10n.getTranslatedText(context, 'Video'),
                                   Colors.orange,
                                   'Video'),
-                              _buildAttachmentOption(context, Icons.audiotrack,
-                                  "Audio", Colors.purple, 'Audio'),
+                              _buildAttachmentOption(
+                                  context,
+                                  Icons.audiotrack,
+                                  L10n.getTranslatedText(context, 'Audio'),
+                                  Colors.purple,
+                                  'Audio'),
                             ],
                           ),
                         );
@@ -685,26 +716,28 @@ class _ASKMeState extends State<ASKMe> {
                       keyboardType: TextInputType.multiline,
                       decoration: InputDecoration(
                         hintText: isConverting
-                            ? "Converting ... "
+                            ? L10n.getTranslatedText(context, 'Converting ... ')
                             : (_isRecording
-                            ? "Recording ... ${_seconds}s"
-                            : "Type a message ..."),
+                                ? L10n.getTranslatedText(
+                                    context, 'Recording ... ${_seconds}s')
+                                : L10n.getTranslatedText(
+                                    context, 'Type a message ...')),
                         contentPadding: EdgeInsets.only(
                             left: 20, right: 60, top: 14, bottom: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
                           borderSide:
-                          BorderSide(color: Colors.grey, width: 1.5),
+                              BorderSide(color: Colors.grey, width: 1.5),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
                           borderSide:
-                          BorderSide(color: Colors.grey, width: 1.5),
+                              BorderSide(color: Colors.grey, width: 1.5),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(30),
                           borderSide:
-                          BorderSide(color: Colors.grey[300]!, width: 1.5),
+                              BorderSide(color: Colors.grey[300]!, width: 1.5),
                         ),
                       ),
                     ),
@@ -723,23 +756,33 @@ class _ASKMeState extends State<ASKMe> {
                 ),
               ),
               SizedBox(width: 12),
-              Container(
-                width: 42,
-                height: 42,
-                child: IconButton(
-                  icon:
-                  Icon(Icons.send, color: AcademeTheme.appColor, size: 25),
-                  onPressed: () {
-                    String message = _textController.text.trim();
-                    _sendMessage(message);
-                    setState(() {
-                      _textController
-                          .clear(); // Clear input field after sending message
-                    });
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
-                ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _textController,
+                builder: (context, value, child) {
+                  final bool isEmpty = value.text.trim().isEmpty;
+                  return SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.send,
+                        color: isEmpty ? Colors.grey : AcademeTheme.appColor,
+                        size: 25,
+                      ),
+                      onPressed: isEmpty
+                          ? null
+                          : () {
+                              String message = _textController.text.trim();
+                              _sendMessage(message);
+                              setState(() {
+                                _textController.clear();
+                              });
+                            },
+                      padding: EdgeInsets.zero,
+                      constraints: BoxConstraints(),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -752,17 +795,31 @@ class _ASKMeState extends State<ASKMe> {
     return TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w600);
   }
 
-  Widget _buildButton(IconData icon, String text, Color color) {
+  Widget _buildButton(IconData icon, String text, Color color, double width) {
+    final height = MediaQuery.of(context).size.height;
+    final width = MediaQuery.of(context).size.width;
+
     return ElevatedButton.icon(
       onPressed: () {},
       style: ElevatedButton.styleFrom(
         foregroundColor: Colors.white,
         backgroundColor: color,
-        padding: EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        padding: EdgeInsets.symmetric(
+            horizontal: width * 0.03, vertical: height * 0.01),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
-      icon: Icon(icon, size: 20),
-      label: Text(text),
+      icon: Icon(icon, size: width * 0.05),
+      label: SizedBox(
+        width: width * 0.25, // Set a fixed width for better text control
+        child: AutoSizeText(
+          text,
+          maxLines: 1, // Ensures text stays in a single line
+          minFontSize: 10, // Minimum text size to avoid overflow
+          stepGranularity: 1, // Smoothly adjusts font size
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16), // Default font size
+        ),
+      ),
     );
   }
 
@@ -796,6 +853,8 @@ class _ASKMeState extends State<ASKMe> {
   }
 
   Widget _buildInitialUI() {
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
     return Center(
       child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -805,18 +864,20 @@ class _ASKMeState extends State<ASKMe> {
             Column(
               children: [
                 Image.asset('assets/icons/ASKMe_dark.png',
-                    width: 120.0, height: 120.0),
-                SizedBox(height: 15),
+                    width: width * 0.3, height: height * 0.09),
+                SizedBox(height: height * 0.01),
                 Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(
-                          text: 'Hey there! I am ',
+                          text: L10n.getTranslatedText(
+                              context, 'Hey there! I am '),
                           style: _textStyle(Colors.black)),
                       TextSpan(
                           text: 'ASKMe', style: _textStyle(Colors.amber[700]!)),
                       TextSpan(
-                          text: ' your\npersonal tutor.',
+                          text: L10n.getTranslatedText(
+                              context, ' your\npersonal tutor.'),
                           style: _textStyle(Colors.black)),
                     ],
                   ),
@@ -824,21 +885,50 @@ class _ASKMeState extends State<ASKMe> {
                 ),
               ],
             ),
-            SizedBox(height: 40),
+            SizedBox(height: height * 0.03),
             Wrap(
-              spacing: 12.0,
-              runSpacing: 12.0,
+              spacing: width * 0.03,
+              runSpacing: height * 0.01,
               alignment: WrapAlignment.center,
               children: [
-                _buildButton(Icons.help_outline, 'Clear Your Doubts',
-                    Colors.lightBlue.shade400),
-                _buildButton(
-                    Icons.quiz, 'Explain / Quiz', Colors.orange.shade400),
-                _buildButton(Icons.upload_file, 'Upload Study Materials',
-                    Colors.green.shade500),
-                _buildButton(Icons.more_horiz, 'More', Colors.grey),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildButton(
+                      Icons.help_outline,
+                      L10n.getTranslatedText(context, 'Clear Your Doubts'),
+                      Colors.lightBlue.shade400,
+                      width,
+                    ),
+                    SizedBox(width: width * 0.03),
+                    _buildButton(
+                      Icons.quiz,
+                      L10n.getTranslatedText(context, 'Explain / Quiz'),
+                      Colors.orange.shade400,
+                      width,
+                    ),
+                  ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildButton(
+                      Icons.upload_file,
+                      L10n.getTranslatedText(context, 'Upload Study Materials'),
+                      Colors.green.shade500,
+                      width,
+                    ),
+                    SizedBox(width: width * 0.03),
+                    _buildButton(
+                      Icons.more_horiz,
+                      L10n.getTranslatedText(context, 'More'),
+                      Colors.grey,
+                      width,
+                    ),
+                  ],
+                ),
               ],
-            ),
+            )
           ],
         ),
       ),
@@ -858,7 +948,7 @@ class _ASKMeState extends State<ASKMe> {
 
         return Column(
           crossAxisAlignment:
-          isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             // Display Image
             if (message.containsKey("fileType") &&
@@ -961,48 +1051,147 @@ class _ASKMeState extends State<ASKMe> {
 
             // Chat Message Bubble
             if (message.containsKey("text") && message["isTyping"] != true)
-              Container(
-                constraints: BoxConstraints(
-                  maxWidth: isUser
-                      ? MediaQuery.of(context).size.width * 0.60
-                      : MediaQuery.of(context).size.width * 0.80,
-                ),
-                padding: EdgeInsets.all(15),
-                margin: EdgeInsets.symmetric(vertical: 5),
-                decoration: BoxDecoration(
-                  gradient: isUser
-                      ? LinearGradient(
-                    colors: [Colors.blue[300]!, Colors.blue[700]!],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                      : null,
-                  color: isUser ? null : Colors.grey[300]!,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: isUser
-                      ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 6,
-                      offset: Offset(2, 4),
-                    ),
-                  ]
-                      : [],
-                ),
-                child: Text(
-                  message["text"],
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: isUser ? Colors.white : Colors.black,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Container(
+                        constraints: BoxConstraints(
+                          maxWidth: isUser
+                              ? MediaQuery.of(context).size.width * 0.60
+                              : MediaQuery.of(context).size.width * 0.80,
+                        ),
+                        padding: EdgeInsets.all(15),
+                        margin: EdgeInsets.symmetric(vertical: 5),
+                        decoration: BoxDecoration(
+                          gradient: isUser
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.blue[300]!,
+                                    Colors.blue[700]!
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : null,
+                          color: isUser ? null : Colors.grey[300]!,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: isUser
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha(15),
+                                    blurRadius: 6,
+                                    offset: Offset(2, 4),
+                                  ),
+                                ]
+                              : [],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _parseInlineBoldText(message["text"], isUser),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ],
               ),
+            if (!isUser && message["isTyping"] != true)
+              if (!isUser && message["isTyping"] != true)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.flag, color: Colors.grey[600], size: 18),
+                      onPressed: () {
+                        _showReportDialog(context, message);
+                      },
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.content_copy, size: 18),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: message["text"]));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Copied to clipboard'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
 
             // Typing Indicator
             if (message["isTyping"] == true) TypingIndicator(),
           ],
         );
       },
+    );
+  }
+
+  void _showReportDialog(BuildContext context, Map<String, dynamic> message) {
+    TextEditingController reportController = TextEditingController();
+    bool isButtonEnabled = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text("Report Message"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Please describe the issue:"),
+                  SizedBox(height: 10),
+                  TextField(
+                    controller: reportController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: "Enter your reason for reporting...",
+                    ),
+                    onChanged: (text) {
+                      setState(() {
+                        isButtonEnabled = text.trim().isNotEmpty;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("Cancel"),
+                ),
+                TextButton(
+                  onPressed: isButtonEnabled
+                      ? () {
+                          _submitReport(message, reportController.text);
+                          Navigator.pop(context);
+                        }
+                      : null, // Disable button when empty
+                  child: Text("Send"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _submitReport(Map<String, dynamic> message, String reportReason) {
+    print("Reported message: ${message["text"]} | Reason: $reportReason");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Report submitted."),
+        duration: Duration(seconds: 2),
+      ),
     );
   }
 
@@ -1027,14 +1216,43 @@ class _ASKMeState extends State<ASKMe> {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2)),
             child:
-            Center(child: Icon(Icons.add, size: 12, color: Colors.white)),
+                Center(child: Icon(Icons.add, size: 12, color: Colors.white)),
           ),
         ),
       ],
     );
   }
-}
 
-void main() {
-  runApp(MaterialApp(home: ASKMe(), debugShowCheckedModeBanner: false));
+  /// **Helper function to parse inline bold text (e.g., *bold* or **bold**)**
+  Widget _parseInlineBoldText(String text, bool isUser) {
+    List<InlineSpan> spans = [];
+    List<String> parts = text.split(RegExp(r'(\*\*|\*)'));
+
+    for (int i = 0; i < parts.length; i++) {
+      if (i % 2 == 1) {
+        // Odd indices are bold text (treat as keys)
+        spans.add(TextSpan(
+          text: parts[i],
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: isUser ? Colors.white : Colors.black87,
+          ),
+        ));
+      } else {
+        // Even indices are regular text (treat as values)
+        spans.add(TextSpan(
+          text: parts[i],
+          style: TextStyle(
+            fontSize: 16,
+            color: isUser ? Colors.white : Colors.black87,
+          ),
+        ));
+      }
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
 }

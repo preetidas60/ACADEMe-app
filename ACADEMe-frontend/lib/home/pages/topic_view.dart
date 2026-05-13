@@ -1,10 +1,10 @@
 import 'dart:convert';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ACADEMe/academe_theme.dart';
-import '../../utils/constants/image_strings.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:provider/provider.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
@@ -16,7 +16,7 @@ class TopicViewScreen extends StatefulWidget {
   const TopicViewScreen({super.key, required this.courseId});
 
   @override
-  _TopicViewScreenState createState() => _TopicViewScreenState();
+  State<TopicViewScreen> createState() => _TopicViewScreenState();
 }
 
 class _TopicViewScreenState extends State<TopicViewScreen>
@@ -28,12 +28,13 @@ class _TopicViewScreenState extends State<TopicViewScreen>
   bool isLoading = true;
   final String backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
   final FlutterSecureStorage storage = const FlutterSecureStorage();
+  final AutoSizeGroup _tabTextGroup = AutoSizeGroup();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    fetchTopics();
+    _fetchTopics();
   }
 
   @override
@@ -42,73 +43,66 @@ class _TopicViewScreenState extends State<TopicViewScreen>
     super.dispose();
   }
 
-  Future<void> fetchTopics() async {
+  Future<void> _fetchTopics() async {
+    if (!mounted) return;
     setState(() {
       isLoading = true;
     });
 
-    String? token = await storage.read(key: 'access_token');
-    String? courseId = await storage.read(key: 'course_id');
-
-    if (token == null || courseId == null) {
-      print("❌ No access token or course ID found");
-      setState(() {
-        isLoading = false;
-      });
-      return;
-    }
-
     try {
-      String targetLanguage =
-          Provider.of<LanguageProvider>(context, listen: false).locale.languageCode;
+      final token = await storage.read(key: 'access_token');
+      if (token == null) throw Exception("No access token found");
+      if (!mounted) return;
+
+      final languageProvider =
+          Provider.of<LanguageProvider>(context, listen: false);
+      final targetLanguage = languageProvider.locale.languageCode;
 
       final response = await http.get(
-        Uri.parse('$backendUrl/api/courses/$courseId/topics/?target_language=$targetLanguage'),
+        Uri.parse(
+            '$backendUrl/api/courses/${widget.courseId}/topics/?target_language=$targetLanguage'),
         headers: {
           'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json; charset=UTF-8',
         },
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
-        List<dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as List;
 
-        List<Map<String, dynamic>> allTopics = [];
-        List<Map<String, dynamic>> ongoing = [];
-        List<Map<String, dynamic>> completed = [];
-
-        for (var topic in data) {
-          double progress = topic["progress"] ?? 0.0; // Ensure progress is valid
-
-          Map<String, dynamic> topicData = {
-            "id": topic["id"],
-            "title": topic["title"],
-            "progress": progress,
+        final allTopics = data.map((topic) {
+          return {
+            "id": topic["id"].toString(),
+            "title": topic["title"].toString(),
+            "progress": (topic["progress"] ?? 0.0).toDouble(),
           };
-
-          allTopics.add(topicData);
-
-          if (progress > 0 && progress < 100) {
-            ongoing.add(topicData);
-          } else if (progress == 100) {
-            completed.add(topicData);
-          }
-        }
+        }).toList();
 
         setState(() {
           topics = allTopics;
-          ongoingTopics = ongoing;
-          completedTopics = completed;
+          ongoingTopics = topics
+              .where((t) => t["progress"] > 0 && t["progress"] < 100)
+              .toList();
+          completedTopics = topics.where((t) => t["progress"] == 100).toList();
         });
       } else {
-        print("❌ Failed to fetch topics: ${response.statusCode}");
+        throw Exception("Failed to fetch topics: ${response.statusCode}");
       }
     } catch (e) {
-      print("❌ Error fetching topics: $e");
+      debugPrint("Error fetching topics: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error loading topics: ${e.toString()}")),
+        );
+      }
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -120,24 +114,31 @@ class _TopicViewScreenState extends State<TopicViewScreen>
         backgroundColor: AcademeTheme.appColor,
         title: Text(
           L10n.getTranslatedText(context, 'Topics'),
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ),
       body: Column(
         children: [
-          TabBar(
-            controller: _tabController,
-            labelColor: Colors.blue,
-            unselectedLabelColor: Colors.black54,
-            labelStyle: const TextStyle(fontSize: 16),
-            indicator: const UnderlineTabIndicator(
-              borderSide: BorderSide(width: 4, color: Colors.blue),
+          Container(
+            color: Colors.white,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: Colors.blue,
+              unselectedLabelColor: Colors.black54,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: UnderlineTabIndicator(
+                borderSide: BorderSide(width: 2, color: Colors.blue),
+              ),
+              tabs: [
+                _buildSynchronizedTab(context, 'ALL'),
+                _buildSynchronizedTab(context, 'ON GOING'),
+                _buildSynchronizedTab(context, 'COMPLETED'),
+              ],
             ),
-            tabs: [
-              Tab(text: L10n.getTranslatedText(context, 'ALL')),
-              Tab(text: L10n.getTranslatedText(context, 'ON GOING')),
-              Tab(text: L10n.getTranslatedText(context, 'COMPLETED')),
-            ],
           ),
           Expanded(
             child: TabBarView(
@@ -154,12 +155,29 @@ class _TopicViewScreenState extends State<TopicViewScreen>
     );
   }
 
+  Widget _buildSynchronizedTab(BuildContext context, String labelKey) {
+    return Tab(
+      child: AutoSizeText(
+        L10n.getTranslatedText(context, labelKey),
+        maxLines: 1,
+        group: _tabTextGroup, // Ensures all tabs scale together
+        style: TextStyle(fontSize: 16),
+        minFontSize: 12, // Prevents text from becoming unreadable
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
   Widget _buildTopicList(List<Map<String, dynamic>> topicList) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.blue));
+      return const Center(
+        child: CircularProgressIndicator(color: AcademeTheme.appColor),
+      );
     }
     if (topicList.isEmpty) {
-      return const Center(child: Text("No topics available"));
+      return Center(
+        child: Text(L10n.getTranslatedText(context, 'No topics available')),
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(20),
@@ -172,20 +190,16 @@ class _TopicViewScreenState extends State<TopicViewScreen>
 
   Widget _buildTopicCard(Map<String, dynamic> topic) {
     return GestureDetector(
-      onTap: () async {
-        await storage.write(key: 'topic_id', value: topic["id"]);
-        String? courseId = await storage.read(key: 'course_id');
-
-        if (courseId != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OverviewScreen(courseId: courseId, topicId: topic["id"]),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OverviewScreen(
+              courseId: widget.courseId,
+              topicId: topic["id"],
             ),
-          );
-        } else {
-          print("❌ Course ID not found in storage.");
-        }
+          ),
+        );
       },
       child: Container(
         height: 100,
@@ -195,25 +209,15 @@ class _TopicViewScreenState extends State<TopicViewScreen>
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(color: Colors.grey.shade300, blurRadius: 5, spreadRadius: 2)
+            BoxShadow(
+              color: Colors.grey.shade300,
+              blurRadius: 5,
+              spreadRadius: 2,
+            )
           ],
         ),
         child: Row(
           children: [
-            // Expanded(
-            //   flex: 2,
-            //   child: ClipRRect(
-            //     borderRadius: BorderRadius.circular(12),
-            //     child: Image.asset(
-            //       topic["image"] ?? AImages.typography,
-            //       fit: BoxFit.cover,
-            //       height: double.infinity,
-            //       errorBuilder: (context, error, stackTrace) {
-            //         return const Icon(Icons.error, color: Colors.red);
-            //       },
-            //     ),
-            //   ),
-            // ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
@@ -222,13 +226,38 @@ class _TopicViewScreenState extends State<TopicViewScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(topic["title"],
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      )),
                   const SizedBox(height: 5),
                   LinearProgressIndicator(
-                    value: (topic["progress"] / 100).clamp(0.0, 1.0), // Ensure it's between 0 and 1
+                    value: (topic["progress"] / 100).clamp(0.0, 1.0),
                     color: Colors.blue,
                     backgroundColor: Colors.grey.shade200,
                   ),
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          L10n.getTranslatedText(context, '0/12 Modules'),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          "${(topic["progress"].clamp(0.0, 100.0).toInt())}%",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      )
+                    ],
+                  )
                 ],
               ),
             ),

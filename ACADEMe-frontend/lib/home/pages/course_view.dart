@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ACADEMe/academe_theme.dart';
-import 'package:ACADEMe/home/pages/ASKMe.dart';
-import 'package:ACADEMe/home/components/ASKMe_button.dart';
+import 'package:ACADEMe/home/pages/ask_me.dart';
+import 'package:ACADEMe/home/components/askme_button.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -16,16 +17,18 @@ class CourseListScreen extends StatefulWidget {
   const CourseListScreen({super.key});
 
   @override
-  _CourseListScreenState createState() => _CourseListScreenState();
+  CourseListScreenState createState() => CourseListScreenState();
 }
 
-class _CourseListScreenState extends State<CourseListScreen>
+class CourseListScreenState extends State<CourseListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool isLoading = true;
   List<Map<String, dynamic>> courses = [];
   String backendUrl = dotenv.env['BACKEND_URL'] ?? '';
   final storage = FlutterSecureStorage();
+
+  final AutoSizeGroup _tabTextGroup = AutoSizeGroup();
 
   @override
   void initState() {
@@ -41,21 +44,32 @@ class _CourseListScreenState extends State<CourseListScreen>
   }
 
   Future<void> fetchCourses() async {
+    if (!mounted) return; // ✅ Ensure widget is still active
+
     setState(() {
       isLoading = true; // Show loading indicator
     });
 
     String? token = await storage.read(key: 'access_token');
     if (token == null) {
-      print("No access token found");
-      setState(() {
-        isLoading = false; // Hide loading indicator
-      });
+      debugPrint("No access token found");
+
+      if (mounted) {
+        setState(() {
+          isLoading = false; // Hide loading indicator
+        });
+      }
       return;
     }
 
     try {
-      String targetLanguage = Provider.of<LanguageProvider>(context, listen: false).locale.languageCode;
+      if (!mounted) return; // ✅ Ensure widget is still active
+
+      String targetLanguage =
+          Provider.of<LanguageProvider>(context, listen: false)
+              .locale
+              .languageCode;
+
       final response = await http.get(
         Uri.parse('$backendUrl/api/courses/?target_language=$targetLanguage'),
         headers: {
@@ -64,24 +78,32 @@ class _CourseListScreenState extends State<CourseListScreen>
         },
       );
 
-      if (response.statusCode == 200) {
-        List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          courses = data.map((course) => {
-            "id": course["id"],
-            "title": course["title"],
-            "progress": 0.0,
-          }).toList();
-        });
-      } else {
-        print("Failed to fetch courses: ${response.statusCode}");
+      if (mounted) {
+        if (response.statusCode == 200) {
+          List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+
+          setState(() {
+            courses = data
+                .map((course) => {
+                      "id": course["id"],
+                      "title": course["title"],
+                      "progress": 0.0,
+                    })
+                .toList();
+          });
+        } else {
+          debugPrint("Failed to fetch courses: ${response.statusCode}");
+        }
       }
     } catch (e) {
-      print("Error fetching courses: $e");
+      debugPrint("Error fetching courses: $e");
     } finally {
-      setState(() {
-        isLoading = false; // Hide loading indicator
-      });
+      // ✅ Only call setState() if mounted
+      if (mounted) {
+        setState(() {
+          isLoading = false; // Hide loading indicator
+        });
+      }
     }
   }
 
@@ -117,7 +139,7 @@ class _CourseListScreenState extends State<CourseListScreen>
       onFABPressed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ASKMe()),
+          MaterialPageRoute(builder: (context) => AskMe()),
         );
       },
       child: Scaffold(
@@ -143,14 +165,14 @@ class _CourseListScreenState extends State<CourseListScreen>
                 controller: _tabController,
                 labelColor: Colors.blue,
                 unselectedLabelColor: Colors.black54,
-                labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
+                indicatorSize: TabBarIndicatorSize.tab,
                 indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(width: 4, color: Colors.blue),
+                  borderSide: BorderSide(width: 2, color: Colors.blue),
                 ),
                 tabs: [
-                  Tab(text: L10n.getTranslatedText(context, 'ALL')),
-                  Tab(text: L10n.getTranslatedText(context, 'ON GOING')),
-                  Tab(text: L10n.getTranslatedText(context, 'COMPLETED')),
+                  _buildSynchronizedTab(context, 'ALL'),
+                  _buildSynchronizedTab(context, 'ON GOING'),
+                  _buildSynchronizedTab(context, 'COMPLETED'),
                 ],
               ),
             ),
@@ -166,6 +188,19 @@ class _CourseListScreenState extends State<CourseListScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSynchronizedTab(BuildContext context, String labelKey) {
+    return Tab(
+      child: AutoSizeText(
+        L10n.getTranslatedText(context, labelKey),
+        maxLines: 1,
+        group: _tabTextGroup, // Ensures all tabs scale together
+        style: TextStyle(fontSize: 16),
+        minFontSize: 12, // Prevents text from becoming unreadable
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -214,20 +249,26 @@ class _CourseListScreenState extends State<CourseListScreen>
     return GestureDetector(
       onTap: () async {
         String selectedCourseId = course["id"];
-        print("Selected Course ID: $selectedCourseId");
+        debugPrint("Selected Course ID: $selectedCourseId");
 
         try {
           await storage.write(key: 'course_id', value: selectedCourseId);
+
+          if (!mounted) {
+            return; // ✅ Ensure widget is still mounted before using context
+          }
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => TopicViewScreen(courseId: selectedCourseId)),
+            MaterialPageRoute(
+              builder: (context) => TopicViewScreen(courseId: selectedCourseId),
+            ),
           );
         } catch (error) {
-          print("Error storing course ID: $error");
+          debugPrint("Error storing course ID: $error");
         }
       },
       child: Container(
-        height: 150,
+        height: 120,
         margin: EdgeInsets.only(bottom: 15),
         padding: EdgeInsets.all(10),
         decoration: BoxDecoration(
@@ -243,17 +284,6 @@ class _CourseListScreenState extends State<CourseListScreen>
         ),
         child: Row(
           children: [
-            // Expanded(
-            //   flex: 2,
-            //   child: ClipRRect(
-            //     borderRadius: BorderRadius.circular(12),
-            //     child: Image.asset(
-            //       course["image"],
-            //       fit: BoxFit.cover,
-            //       height: double.infinity,
-            //     ),
-            //   ),
-            // ),
             SizedBox(width: 12),
             Expanded(
               flex: 3,
@@ -278,7 +308,8 @@ class _CourseListScreenState extends State<CourseListScreen>
                       ),
                       Container(
                         height: 5,
-                        width: MediaQuery.of(context).size.width * (course["progress"] * 0.6),
+                        width: MediaQuery.of(context).size.width *
+                            (course["progress"] * 0.6),
                         decoration: BoxDecoration(
                           color: Colors.blue,
                           borderRadius: BorderRadius.circular(5),
@@ -287,10 +318,22 @@ class _CourseListScreenState extends State<CourseListScreen>
                     ],
                   ),
                   SizedBox(height: 5),
-                  Text(
-                    "${(course["progress"].clamp(0.0, 1.0) * 100).toInt()}% Complete",
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
-                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                              "0/12 ${L10n.getTranslatedText(context, 'Modules')}")),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          "${(course["progress"].clamp(0.0, 1.0) * 100).toInt()}% ",
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      )
+                    ],
+                  )
                 ],
               ),
             ),

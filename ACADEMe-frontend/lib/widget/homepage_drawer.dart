@@ -1,169 +1,187 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ACADEMe/home/auth/auth_service.dart';
-import 'package:ACADEMe/introduction_page.dart';
-import 'package:ACADEMe/home/pages/course_view.dart';
-import 'package:ACADEMe/home/pages/profile.dart';
-import 'package:ACADEMe/home/pages/ASKMe.dart';
-import '../../academe_theme.dart';
+import 'package:ACADEMe/home/pages/ask_me.dart';
 import 'package:ACADEMe/home/pages/my_progress.dart';
 import 'package:ACADEMe/localization/l10n.dart';
+import '../started/pages/login_view.dart';
 
 class HomepageDrawer extends StatelessWidget {
   final VoidCallback onClose;
+  final VoidCallback onProfileTap; // Callback for profile navigation
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final VoidCallback onCourseTap;
 
-  const HomepageDrawer({Key? key, required this.onClose}) : super(key: key);
+  const HomepageDrawer({
+    super.key,
+    required this.onClose,
+    required this.onProfileTap,
+    required this.onCourseTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.75, // 75% of screen width
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topRight: Radius.circular(20),
-          bottomRight: Radius.circular(20),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            spreadRadius: 2,
+    return FutureBuilder<Map<String, String?>>(
+      future: _getUserDetails(),
+      builder: (context, snapshot) {
+        final String name = snapshot.data?['name'] ?? 'User';
+        final String photoUrl =
+            snapshot.data?['photo_url'] ?? 'assets/design_course/userImage.png';
+
+        return Container(
+          width: MediaQuery.of(context).size.width * 0.75,
+          height: MediaQuery.of(context).size.height * 1,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Logo aligned slightly to the left
-          Padding(
-            padding: const EdgeInsets.only(top: 40, left: 0),
-            child: SizedBox(
-              height: 60,
-              width: 300,
-              child: Image.asset(
-                'assets/academe/academe_logo.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.centerLeft,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Drawer Items with Navigation
-          _buildDrawerItem(Icons.bookmark, L10n.getTranslatedText(context, 'Bookmarks'), () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (context) =>
-            //         const BookmarksScreen(), // Directly navigate to BookmarksScreen
-            //   ),
-            // );
-          }),
-          _buildDrawerItem(Icons.person, L10n.getTranslatedText(context, 'Profile'), () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    const ProfilePage(), // Directly navigate to ProfileScreen
-              ),
-            );
-          }),
-          _buildDrawerItem(Icons.menu_book, L10n.getTranslatedText(context, 'My Courses'), () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    const CourseListScreen(), // Directly navigate to CourseListScreen
-              ),
-            );
-          }),
-          _buildDrawerItem(Icons.show_chart, L10n.getTranslatedText(context, 'My Progress'), () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    ProgressScreen(), // Directly navigate to ProgressScreen
-              ),
-            );
-          }),
-          _buildDrawerItem(Icons.headset_mic, "ASKMe", () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    ASKMe(), // Directly navigate to AskMeScreen
-              ),
-            );
-          }),
-          _buildDrawerItem(Icons.settings, L10n.getTranslatedText(context, 'Settings'), () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (context) =>
-            //         const SettingsScreen(), // Directly navigate to SettingsScreen
-            //   ),
-            // );
-          }),
-          _buildDrawerItem(Icons.help_outline, L10n.getTranslatedText(context, 'Get Help'), () {
-            // Navigator.push(
-            //   context,
-            //   MaterialPageRoute(
-            //     builder: (context) =>
-            //         const HelpScreen(), // Directly navigate to HelpScreen
-            //   ),
-            // );
-          }),
-
-          // Spacer to push user section to the bottom
-          const Spacer(),
-
-          // User Profile Section
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                // Circular Avatar with Border
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.blueAccent, width: 3),
-                  ),
-                  child: const CircleAvatar(
-                    radius: 25,
-                    backgroundImage:
-                        AssetImage('assets/design_course/userImage.png'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Logo aligned slightly to the left
+              Padding(
+                padding: const EdgeInsets.only(top: 40, left: 0),
+                child: SizedBox(
+                  height: 60,
+                  width: 300,
+                  child: Image.asset(
+                    'assets/academe/academe_logo.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerLeft,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  "Alex",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              ),
+              const SizedBox(height: 20),
+              // Drawer Items with Navigation
+              _buildDrawerItem(
+                  Icons.bookmark, L10n.getTranslatedText(context, 'Bookmarks'),
+                  () {
+                // Navigator.push(
+                //   context,
+                //   MaterialPageRoute(
+                //     builder: (context) => const BookmarksScreen(),
+                //   ),
+                // );
+              }),
+              _buildDrawerItem(
+                  Icons.person, L10n.getTranslatedText(context, 'Profile'), () {
+                onProfileTap();
+                onClose();
+              }),
+              _buildDrawerItem(
+                Icons.menu_book,
+                L10n.getTranslatedText(context, 'My Courses'),
+                () {
+                  onCourseTap(); // Navigates to the function you want
+                  onClose();
+                },
+              ),
+              _buildDrawerItem(Icons.show_chart,
+                  L10n.getTranslatedText(context, 'My Progress'), () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProgressScreen(),
+                  ),
+                );
+              }),
+              _buildDrawerItem(Icons.headset_mic, "ASKMe", () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AskMe(),
+                  ),
+                );
+              }),
+              _buildDrawerItem(
+                  Icons.settings, L10n.getTranslatedText(context, 'Settings'),
+                  () {
+                // Navigator.push(
+                //   context,
+                //   MaterialPageRoute(
+                //     builder: (context) => const SettingsScreen(),
+                //   ),
+                // );
+              }),
+              _buildDrawerItem(Icons.help_outline,
+                  L10n.getTranslatedText(context, 'Get Help'), () {
+                // Navigator.push(
+                //   context,
+                //   MaterialPageRoute(
+                //     builder: (context) => const HelpScreen(),
+                //   ),
+                // );
+              }),
+              const Spacer(),
+              // User Profile Section
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        onProfileTap();
+                        onClose();
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: Colors.blueAccent, width: 3),
+                        ),
+                        child: CircleAvatar(
+                          radius: 25,
+                          backgroundImage: photoUrl.startsWith('http')
+                              ? NetworkImage(photoUrl) as ImageProvider
+                              : AssetImage(photoUrl),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 20),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.logout,
+                          color: Colors.redAccent, size: 28),
+                      onPressed: () => _handleLogout(context),
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.logout,
-                      color: Colors.redAccent, size: 28),
-                  onPressed: () async {
-                    try {
-                      await AuthService().signOut();
-                      print('✅ User signed out successfully');
-
-                      // Navigate to the introduction screen after logout
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                            builder: (context) => const AcademeScreen()),
-                      );
-                    } catch (e) {
-                      print('❌ Error during logout: $e');
-                    }
-                  },
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    try {
+      await AuthService().signOut();
+      if (context.mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LogInView()),
+        );
+      }
+    } catch (e) {
+      // Error handling without print statements
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
@@ -172,7 +190,7 @@ class HomepageDrawer extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap, // Handle onTap action here
+          onTap: onTap,
           borderRadius: BorderRadius.circular(10),
           splashColor: const Color.fromARGB(255, 214, 238, 242),
           highlightColor: const Color.fromARGB(255, 166, 221, 239),
@@ -186,5 +204,14 @@ class HomepageDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<Map<String, String?>> _getUserDetails() async {
+    final String? name = await _secureStorage.read(key: 'name');
+    final String? photoUrl = await _secureStorage.read(key: 'photo_url');
+    return {
+      'name': name,
+      'photo_url': photoUrl,
+    };
   }
 }

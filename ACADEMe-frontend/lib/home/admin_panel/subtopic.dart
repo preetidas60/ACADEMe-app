@@ -1,15 +1,17 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:provider/provider.dart';
 import '../../academe_theme.dart';
-import 'TopicQuiz.dart'; // Import the TopicQuiz screen
+import '../../localization/l10n.dart';
+import 'topic_quiz.dart'; // Import the TopicQuiz screen
 import 'material.dart'; // Import the MaterialScreen
-import 'SubTopicContent.dart';
+import 'sub_topic_content.dart';
+import '../../localization/language_provider.dart'; // Import the LanguageProvider
 
 class SubtopicScreen extends StatefulWidget {
   final String courseId;
@@ -18,7 +20,8 @@ class SubtopicScreen extends StatefulWidget {
   final String topicTitle;
   final String targetLanguage;
 
-  SubtopicScreen({
+  const SubtopicScreen({
+    super.key,
     required this.courseId,
     required this.topicId,
     required this.courseTitle,
@@ -27,10 +30,11 @@ class SubtopicScreen extends StatefulWidget {
   });
 
   @override
-  _SubtopicScreenState createState() => _SubtopicScreenState();
+  SubtopicScreenState createState() => SubtopicScreenState();
 }
 
-class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProviderStateMixin {
+class SubtopicScreenState extends State<SubtopicScreen>
+    with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> subtopics = [];
   List<Map<String, dynamic>> materials = [];
   List<Map<String, dynamic>> quizzes = [];
@@ -44,7 +48,8 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
   void initState() {
     super.initState();
     _fetchAllData();
-    _tabController = TabController(length: 3, vsync: this); // Initialize TabController
+    _tabController =
+        TabController(length: 3, vsync: this); // Initialize TabController
   }
 
   @override
@@ -68,11 +73,16 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
   }
 
   Future<void> _fetchSubtopics() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+    final targetLanguage = languageProvider.locale.languageCode;
+
     final url = Uri.parse(
-        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/subtopics/?target_language=${widget.targetLanguage}");
+        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/subtopics/?target_language=$targetLanguage");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return;
@@ -82,12 +92,12 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         url,
         headers: {
           "Authorization": "Bearer $token", // Add token to headers
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
           subtopics = data.cast<Map<String, dynamic>>();
         });
@@ -104,7 +114,8 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/materials/");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return;
@@ -114,12 +125,12 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         url,
         headers: {
           "Authorization": "Bearer $token", // Add token to headers
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
           materials = data.cast<Map<String, dynamic>>();
         });
@@ -132,11 +143,16 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
   }
 
   Future<void> _fetchQuizzes() async {
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
+    final targetLanguage = languageProvider.locale.languageCode;
+
     final url = Uri.parse(
-        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/quizzes/?target_language=${widget.targetLanguage}");
+        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/quizzes/?target_language=$targetLanguage");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return;
@@ -146,12 +162,12 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         url,
         headers: {
           "Authorization": "Bearer $token", // Add token to headers
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
           quizzes = data.cast<Map<String, dynamic>>();
         });
@@ -168,20 +184,23 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       context: context,
       builder: (context) {
         final TextEditingController titleController = TextEditingController();
-        final TextEditingController descriptionController = TextEditingController();
+        final TextEditingController descriptionController =
+            TextEditingController();
 
         return AlertDialog(
-          title: Text("Add Subtopic"),
+          title: Text(L10n.getTranslatedText(context, 'Add Subtopic')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: titleController,
-                decoration: InputDecoration(labelText: "Title"),
+                decoration: InputDecoration(
+                    labelText: L10n.getTranslatedText(context, 'Title')),
               ),
               TextField(
                 controller: descriptionController,
-                decoration: InputDecoration(labelText: "Description"),
+                decoration: InputDecoration(
+                    labelText: L10n.getTranslatedText(context, 'Description')),
                 maxLines: 3,
               ),
             ],
@@ -189,22 +208,26 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("Cancel"),
+              child: Text(L10n.getTranslatedText(context, 'Cancel')),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.isNotEmpty && descriptionController.text.isNotEmpty) {
+                if (titleController.text.isNotEmpty &&
+                    descriptionController.text.isNotEmpty) {
                   final success = await _submitSubtopic(
                     title: titleController.text,
                     description: descriptionController.text,
                   );
+                  if (!context.mounted) {
+                    return; // Now properly wrapped in a block
+                  }
                   if (success) {
                     Navigator.pop(context);
                     _fetchSubtopics();
                   }
                 }
               },
-              child: Text("Add"),
+              child: Text(L10n.getTranslatedText(context, 'Add')),
             ),
           ],
         );
@@ -212,12 +235,14 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
     );
   }
 
-  Future<bool> _submitSubtopic({required String title, required String description}) async {
+  Future<bool> _submitSubtopic(
+      {required String title, required String description}) async {
     final url = Uri.parse(
         "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/subtopics/");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return false;
@@ -227,7 +252,7 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         url,
         headers: {
           "Authorization": "Bearer $token", // Add token to headers
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
         body: json.encode({
           "title": title,
@@ -236,8 +261,8 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = json.decode(response.body);
-        print("✅ Subtopic added successfully: ${responseData["message"]}");
+        final responseData = json.decode(utf8.decode(response.bodyBytes));
+        debugPrint("✅ Subtopic added successfully: ${responseData["message"]}");
         return true;
       } else {
         _showError("Failed to add subtopic: ${response.body}");
@@ -262,52 +287,58 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text("Add Material"),
+              title: Text(L10n.getTranslatedText(context, 'Add Topic Material')),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<String>(
-                      decoration: InputDecoration(labelText: "Type"),
+                      decoration: InputDecoration(labelText: L10n.getTranslatedText(context, 'Type')),
                       items: ["text", "video", "image", "audio", "document"]
                           .map((type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
-                      ))
+                                value: type,
+                                child: Text(type),
+                              ))
                           .toList(),
-                      onChanged: (value) => setDialogState(() => selectedType = value ?? ""),
+                      onChanged: (value) =>
+                          setDialogState(() => selectedType = value ?? ""),
                     ),
                     DropdownButtonFormField<String>(
-                      decoration: InputDecoration(labelText: "Category"),
+                      decoration: InputDecoration(labelText: L10n.getTranslatedText(context, 'Category')),
                       items: ["Notes", "Reference Links", "Practice Questions"]
                           .map((type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
-                      ))
+                                value: type,
+                                child: Text(type),
+                              ))
                           .toList(),
-                      onChanged: (value) => setDialogState(() => category = value ?? ""),
+                      onChanged: (value) =>
+                          setDialogState(() => category = value ?? ""),
                     ),
                     if (selectedType == "text") ...[
                       SizedBox(height: 10),
                       TextField(
                         decoration: InputDecoration(labelText: "Text Content"),
-                        onChanged: (value) => setDialogState(() => textContent = value),
+                        onChanged: (value) =>
+                            setDialogState(() => textContent = value),
                       ),
                     ],
                     if (selectedType != null && selectedType != "text") ...[
                       SizedBox(height: 10),
                       ElevatedButton.icon(
                         onPressed: () async {
-                          FilePickerResult? result = await FilePicker.platform.pickFiles();
-                          if (result != null && result.files.single.path != null) {
+                          FilePickerResult? result =
+                              await FilePicker.platform.pickFiles();
+                          if (result != null &&
+                              result.files.single.path != null) {
                             setDialogState(() {
                               filePath = result.files.single.path!;
                             });
-                            print("✅ File picked: $filePath");
+                            debugPrint("✅ File picked: $filePath");
                           }
                         },
                         icon: Icon(Icons.attach_file),
-                        label: Text("Attach File"),
+                        label: Text(
+                            L10n.getTranslatedText(context, 'Attach File')),
                       ),
                       if (filePath != null)
                         Padding(
@@ -317,8 +348,11 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
                     ],
                     SizedBox(height: 10),
                     TextField(
-                      decoration: InputDecoration(labelText: "Optional Text"),
-                      onChanged: (value) => setDialogState(() => optionalText = value),
+                      decoration: InputDecoration(
+                          labelText:
+                              L10n.getTranslatedText(context, 'Optional Text')),
+                      onChanged: (value) =>
+                          setDialogState(() => optionalText = value),
                     ),
                   ],
                 ),
@@ -326,7 +360,7 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text("Cancel"),
+                  child: Text(L10n.getTranslatedText(context, 'Cancel')),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -338,6 +372,9 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
                           optionalText: optionalText,
                           textContent: textContent,
                         );
+                        if (!context.mounted) {
+                          return; // Now properly wrapped in a block
+                        }
                         Navigator.pop(context);
                       } else if (selectedType != "text" && filePath != null) {
                         await _uploadMaterial(
@@ -346,6 +383,9 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
                           optionalText: optionalText,
                           filePath: filePath,
                         );
+                        if (!context.mounted) {
+                          return; // Now properly wrapped in a block
+                        }
                         Navigator.pop(context);
                       } else {
                         _showError("Please fill all required fields!");
@@ -354,7 +394,7 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
                       _showError("Please select type and category!");
                     }
                   },
-                  child: Text("Upload"),
+                  child: Text(L10n.getTranslatedText(context, 'Upload')),
                 ),
               ],
             );
@@ -375,14 +415,16 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/materials/");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return;
       }
 
       var request = http.MultipartRequest("POST", url);
-      request.headers["Authorization"] = "Bearer $token"; // Add token to headers
+      request.headers["Authorization"] =
+          "Bearer $token"; // Add token to headers
       request.fields["type"] = type;
       request.fields["category"] = category;
       if (optionalText != null) {
@@ -406,10 +448,11 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print("✅ Material uploaded successfully!");
+        debugPrint("✅ Material uploaded successfully!");
         await _fetchMaterials();
       } else {
-        _showError("Failed to upload material: ${response.statusCode} - $responseBody");
+        _showError(
+            "Failed to upload material: ${response.statusCode} - $responseBody");
       }
     } catch (e) {
       _showError("Error uploading material: $e");
@@ -445,20 +488,23 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       context: context,
       builder: (context) {
         final TextEditingController titleController = TextEditingController();
-        final TextEditingController descriptionController = TextEditingController();
+        final TextEditingController descriptionController =
+            TextEditingController();
 
         return AlertDialog(
-          title: Text("Add Quiz"),
+          title: Text(L10n.getTranslatedText(context, 'Add Topic Quiz')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: titleController,
-                decoration: InputDecoration(labelText: "Title"),
+                decoration: InputDecoration(
+                    labelText: L10n.getTranslatedText(context, 'Title')),
               ),
               TextField(
                 controller: descriptionController,
-                decoration: InputDecoration(labelText: "Description"),
+                decoration: InputDecoration(
+                    labelText: L10n.getTranslatedText(context, 'Description')),
                 maxLines: 3,
               ),
             ],
@@ -466,22 +512,26 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("Cancel"),
+              child: Text(L10n.getTranslatedText(context, 'Cancel')),
             ),
             ElevatedButton(
               onPressed: () async {
-                if (titleController.text.isNotEmpty && descriptionController.text.isNotEmpty) {
+                if (titleController.text.isNotEmpty &&
+                    descriptionController.text.isNotEmpty) {
                   final success = await _submitQuiz(
                     title: titleController.text,
                     description: descriptionController.text,
                   );
+                  if (!context.mounted) {
+                    return; // Now properly wrapped in a block
+                  }
                   if (success) {
                     Navigator.pop(context);
                     _fetchQuizzes();
                   }
                 }
               },
-              child: Text("Add"),
+              child: Text(L10n.getTranslatedText(context, 'Add')),
             ),
           ],
         );
@@ -489,12 +539,14 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
     );
   }
 
-  Future<bool> _submitQuiz({required String title, required String description}) async {
+  Future<bool> _submitQuiz(
+      {required String title, required String description}) async {
     final url = Uri.parse(
         "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/quizzes/");
 
     try {
-      String? token = await _storage.read(key: "access_token"); // Retrieve token
+      String? token =
+          await _storage.read(key: "access_token"); // Retrieve token
       if (token == null) {
         _showError("No access token found");
         return false;
@@ -504,7 +556,7 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         url,
         headers: {
           "Authorization": "Bearer $token", // Add token to headers
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
         body: json.encode({
           "title": title,
@@ -513,8 +565,8 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = json.decode(response.body);
-        print("✅ Quiz added successfully: ${responseData["message"]}");
+        final responseData = json.decode(utf8.decode(response.bodyBytes));
+        debugPrint("✅ Quiz added successfully: ${responseData["message"]}");
         return true;
       } else {
         _showError("Failed to add quiz: ${response.body}");
@@ -530,7 +582,7 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-    print(message);
+    debugPrint(message);
   }
 
   @override
@@ -545,11 +597,12 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white, // Set tab text color to white
-          unselectedLabelColor: Colors.white.withOpacity(0.5), // Set unselected tab text color
-          tabs: const [
-            Tab(text: "Subtopics"),
-            Tab(text: "Topic Materials"),
-            Tab(text: "Topic Quizzes"),
+          unselectedLabelColor:
+              Colors.white.withValues(), // Set unselected tab text color
+          tabs: [
+            Tab(text: L10n.getTranslatedText(context, 'Subtopics')),
+            Tab(text: L10n.getTranslatedText(context, 'Topic Materials')),
+            Tab(text: L10n.getTranslatedText(context, 'Topic Quizzes')),
           ],
         ),
       ),
@@ -560,22 +613,23 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
           isLoading
               ? Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-            child: _buildList(subtopics, (item) => _buildSubtopicContent(item)),
-          ),
+                  child: _buildList(
+                      subtopics, (item) => _buildSubtopicContent(item)),
+                ),
 
           // Topic's Materials Tab
           isLoading
               ? Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-            child: _buildMaterialList(),
-          ),
+                  child: _buildMaterialList(),
+                ),
 
           // Topic's Quizzes Tab
           isLoading
               ? Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-            child: _buildQuizList(),
-          ),
+                  child: _buildQuizList(),
+                ),
         ],
       ),
       floatingActionButton: Column(
@@ -583,39 +637,46 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (isMenuOpen) ...[
-            _buildMenuItem("Add Subtopic", Icons.note_add, _addSubtopic),
+            _buildMenuItem(L10n.getTranslatedText(context, 'Add Subtopic'),
+                Icons.note_add, _addSubtopic),
             SizedBox(height: 10),
-            _buildMenuItem("Add Material", Icons.upload_file, _addMaterial),
+            _buildMenuItem(L10n.getTranslatedText(context, 'Add Material'),
+                Icons.upload_file, _addMaterial),
             SizedBox(height: 10),
-            _buildMenuItem("Add Quiz", Icons.quiz, _addQuiz),
+            _buildMenuItem(L10n.getTranslatedText(context, 'Add Quiz'),
+                Icons.quiz, _addQuiz),
+            SizedBox(height: 10),
           ],
           FloatingActionButton(
             onPressed: () => setState(() => isMenuOpen = !isMenuOpen),
             backgroundColor: AcademeTheme.appColor,
-            child: Icon(isMenuOpen ? Icons.close : Icons.add, color: Colors.white),
+            child:
+                Icon(isMenuOpen ? Icons.close : Icons.add, color: Colors.white),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildList(List<Map<String, dynamic>> items, Widget Function(Map<String, dynamic>) onTap) {
+  Widget _buildList(List<Map<String, dynamic>> items,
+      Widget Function(Map<String, dynamic>) onTap) {
     return items.isNotEmpty
         ? ListView(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      children: items.map((item) {
-        return Card(
-          margin: EdgeInsets.only(bottom: 10),
-          child: ListTile(
-            title: Text(item["title"] ?? "No Title"),
-            subtitle: Text(item["description"] ?? "No Description"),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => onTap(item))),
-          ),
-        );
-      }).toList(),
-    )
-        : Center(child: Text("No items available"));
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            children: items.map((item) {
+              return Card(
+                margin: EdgeInsets.only(bottom: 10),
+                child: ListTile(
+                  title: Text(item["title"] ?? "No Title"),
+                  subtitle: Text(item["description"] ?? "No Description"),
+                  onTap: () => Navigator.push(
+                      context, MaterialPageRoute(builder: (_) => onTap(item))),
+                ),
+              );
+            }).toList(),
+          )
+        : Center(child: Text(L10n.getTranslatedText(context, 'No items available')));
   }
 
   Widget _buildSubtopicContent(Map<String, dynamic> item) {
@@ -626,86 +687,90 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       topicTitle: widget.topicTitle,
       subtopicId: item["id"],
       subtopicTitle: item["title"] ?? "Subtopic Content",
-      targetLanguage: widget.targetLanguage,
+      // targetLanguage: widget.targetLanguage,
     );
   }
 
   Widget _buildMaterialList() {
     return materials.isNotEmpty
         ? ListView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: materials.length,
-      itemBuilder: (context, index) {
-        final material = materials[index];
-        return Card(
-          margin: EdgeInsets.symmetric(vertical: 8.0),
-          child: ListTile(
-            title: Text(material["type"] ?? "Unknown"),
-            subtitle: Text(material["category"] ?? "No category"),
-            trailing: Icon(Icons.open_in_new),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MaterialScreen(
-                    courseId: widget.courseId,
-                    topicId: widget.topicId,
-                    materialId: material["id"],
-                    materialType: material["type"],
-                    materialCategory: material["category"],
-                    optionalText: material["optional_text"],
-                    textContent: material["text_content"],
-                    fileUrl: material["file_url"],
-                  ),
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: materials.length,
+            itemBuilder: (context, index) {
+              final material = materials[index];
+              return Card(
+                margin: EdgeInsets.symmetric(vertical: 8.0),
+                child: ListTile(
+                  title: Text(material["type"] ?? "Unknown"),
+                  subtitle: Text(material["category"] ?? "No category"),
+                  trailing: Icon(Icons.open_in_new),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MaterialScreen(
+                          courseId: widget.courseId,
+                          topicId: widget.topicId,
+                          materialId: material["id"],
+                          materialType: material["type"],
+                          materialCategory: material["category"],
+                          optionalText: material["optional_text"],
+                          textContent: material["text_content"],
+                          fileUrl: material["file_url"],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               );
             },
-          ),
-        );
-      },
-    )
-        : Center(child: Text("No materials available"));
+          )
+        : Center(
+            child: Text(
+                L10n.getTranslatedText(context, 'No materials are available')));
   }
 
   Widget _buildQuizList() {
     return quizzes.isNotEmpty
         ? ListView.builder(
-      shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      itemCount: quizzes.length,
-      itemBuilder: (context, index) {
-        final quiz = quizzes[index];
-        return Card(
-          margin: EdgeInsets.symmetric(vertical: 8),
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ListTile(
-            title: Text(quiz["title"] ?? "No Title"),
-            subtitle: Text(quiz["description"] ?? "No Description"),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TopicQuizScreen(
-                    courseId: widget.courseId,
-                    topicId: widget.topicId,
-                    quizId: quiz["id"],
-                    courseTitle: widget.courseTitle,
-                    topicTitle: widget.topicTitle,
-                    quizTitle: quiz["title"],
-                    targetLanguage: widget.targetLanguage,
-                  ),
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: quizzes.length,
+            itemBuilder: (context, index) {
+              final quiz = quizzes[index];
+              return Card(
+                margin: EdgeInsets.symmetric(vertical: 8),
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  title: Text(quiz["title"] ?? "No Title"),
+                  subtitle: Text(quiz["description"] ?? "No Description"),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TopicQuizScreen(
+                          courseId: widget.courseId,
+                          topicId: widget.topicId,
+                          quizId: quiz["id"],
+                          courseTitle: widget.courseTitle,
+                          topicTitle: widget.topicTitle,
+                          quizTitle: quiz["title"],
+                          targetLanguage: widget.targetLanguage,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               );
             },
-          ),
-        );
-      },
-    )
-        : Center(child: Text("No quizzes available"));
+          )
+        : Center(
+            child:
+                Text(L10n.getTranslatedText(context, 'No quizzes available')));
   }
 
   Widget _buildMenuItem(String title, IconData icon, VoidCallback onPressed) {
@@ -715,9 +780,5 @@ class _SubtopicScreenState extends State<SubtopicScreen> with SingleTickerProvid
       label: Text(title, style: TextStyle(color: Colors.white)),
       backgroundColor: AcademeTheme.appColor,
     );
-  }
-
-  void _handleFileClick(String fileUrl, String fileType) {
-    print("📂 Opening file: $fileUrl");
   }
 }

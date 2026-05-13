@@ -1,4 +1,5 @@
 import 'package:ACADEMe/academe_theme.dart';
+import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -7,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:provider/provider.dart';
+import '../../localization/language_provider.dart'; // Import the LanguageProvider
 
 class MaterialScreen extends StatefulWidget {
   final String courseId;
@@ -19,7 +22,7 @@ class MaterialScreen extends StatefulWidget {
   final String? textContent;
   final String? fileUrl;
 
-  MaterialScreen({
+  const MaterialScreen({super.key, 
     required this.courseId,
     required this.topicId,
     this.subtopicId,
@@ -32,10 +35,10 @@ class MaterialScreen extends StatefulWidget {
   });
 
   @override
-  _MaterialScreenState createState() => _MaterialScreenState();
+  MaterialScreenState createState() => MaterialScreenState();
 }
 
-class _MaterialScreenState extends State<MaterialScreen> {
+class MaterialScreenState extends State<MaterialScreen> {
   final _storage = FlutterSecureStorage();
   bool isLoading = true;
   Map<String, dynamic>? materialDetails;
@@ -56,12 +59,15 @@ class _MaterialScreenState extends State<MaterialScreen> {
   }
 
   Future<void> _fetchMaterialDetails() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final targetLanguage = languageProvider.locale.languageCode;
+
     // Construct the URL based on whether subtopicId is provided
     final url = widget.subtopicId == null
         ? Uri.parse(
-        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/materials/")
+        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/materials/?target_language=$targetLanguage")
         : Uri.parse(
-        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/subtopics/${widget.subtopicId}/materials/");
+        "${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/courses/${widget.courseId}/topics/${widget.topicId}/subtopics/${widget.subtopicId}/materials/?target_language=$targetLanguage");
 
     try {
       String? token = await _storage.read(key: "access_token");
@@ -74,12 +80,12 @@ class _MaterialScreenState extends State<MaterialScreen> {
         url,
         headers: {
           "Authorization": "Bearer $token",
-          "Content-Type": "application/json",
+          "Content-Type": "application/json; charset=utf-8",
         },
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         final material = data.firstWhere(
               (material) => material["id"] == widget.materialId,
           orElse: () => null,
@@ -107,7 +113,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
   }
 
   void _initializeVideoPlayer(String videoUrl) {
-    _videoPlayerController = VideoPlayerController.network(videoUrl)
+    _videoPlayerController = VideoPlayerController.networkUrl(videoUrl as Uri)
       ..initialize().then((_) {
         setState(() {
           _chewieController = ChewieController(
@@ -124,12 +130,12 @@ class _MaterialScreenState extends State<MaterialScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
-    print(message);
+    debugPrint(message);
   }
 
   Future<void> _launchFile(String fileUrl) async {
-    if (await canLaunch(fileUrl)) {
-      await launch(fileUrl);
+    if (await canLaunchUrl(fileUrl as Uri)) {
+      await launchUrl(fileUrl as Uri);
     } else {
       _showError("Could not launch file: $fileUrl");
     }
@@ -137,12 +143,12 @@ class _MaterialScreenState extends State<MaterialScreen> {
 
   Widget _buildMaterialContent() {
     if (materialDetails == null) {
-      return Center(child: Text("No content available"));
+      return Center(child: Text(L10n.getTranslatedText(context, 'No content available')));
     }
 
     final type = materialDetails!["type"];
     final content = materialDetails!["content"];
-    final optionalText = materialDetails!["optional_text"];
+    // final optionalText = materialDetails!["optional_text"];
 
     switch (type) {
       case "text":
@@ -151,7 +157,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
           child: Padding(
             padding: EdgeInsets.all(16),
             child: Text(
-              content ?? "No content available",
+              content ?? L10n.getTranslatedText(context, 'No content available'),
               style: TextStyle(fontSize: 16),
             ),
           ),
@@ -209,7 +215,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
       margin: EdgeInsets.all(8),
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
+        color: Colors.black.withAlpha(20),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -224,7 +230,7 @@ class _MaterialScreenState extends State<MaterialScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "Material Details",
+          L10n.getTranslatedText(context, 'Material Details'),
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AcademeTheme.white),
         ),
         backgroundColor: AcademeTheme.appColor,
@@ -240,11 +246,11 @@ class _MaterialScreenState extends State<MaterialScreen> {
               margin: EdgeInsets.all(8),
               child: ListTile(
                 title: Text(
-                  "Type: ${materialDetails?["type"] ?? widget.materialType}",
+                  "${L10n.getTranslatedText(context, 'Type')}: ${materialDetails?["type"] ?? widget.materialType}",
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
-                  "Category: ${materialDetails?["category"] ?? widget.materialCategory}",
+                  "${L10n.getTranslatedText(context, 'Category')}: ${materialDetails?["category"] ?? widget.materialCategory}",
                   style: TextStyle(fontSize: 16),
                 ),
               ),
