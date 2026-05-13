@@ -79,7 +79,7 @@ class OverviewScreenState extends State<OverviewScreen>
 
         if (jsonData is List) {
           final topic = jsonData.firstWhere(
-            (topic) => topic['id'] == widget.topicId,
+                (topic) => topic['id'] == widget.topicId,
             orElse: () => null,
           );
           if (topic != null) {
@@ -198,13 +198,13 @@ class OverviewScreenState extends State<OverviewScreen>
                       Expanded(
                         child: SingleChildScrollView(
                           padding:
-                              EdgeInsets.symmetric(horizontal: width * 0.03),
+                          EdgeInsets.symmetric(horizontal: width * 0.03),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SizedBox(height: height * 0.02),
                               Text(
-                                isLoading ? "Loading..." : topicTitle,
+                                isLoading ? "${L10n.getTranslatedText(context, 'Loading')}..." : topicTitle,
                                 style: TextStyle(
                                   fontSize: width * 0.08,
                                   color: Colors.black,
@@ -214,7 +214,7 @@ class OverviewScreenState extends State<OverviewScreen>
                               SizedBox(height: height * 0.01),
                               Text(
                                 isLoading
-                                    ? "Fetching topic details..."
+                                    ? "${L10n.getTranslatedText(context, 'Fetching topic details')}..."
                                     : topicDescription,
                                 style: TextStyle(
                                   fontSize: width * 0.04,
@@ -293,8 +293,8 @@ class OverviewScreenState extends State<OverviewScreen>
                     children: [
                       hasSubtopicData
                           ? LessonsSection(
-                              courseId: widget.courseId,
-                              topicId: widget.topicId)
+                          courseId: widget.courseId,
+                          topicId: widget.topicId)
                           : Center(child: CircularProgressIndicator()),
                       QSection(),
                     ],

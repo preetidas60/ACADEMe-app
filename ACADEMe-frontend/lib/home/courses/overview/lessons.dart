@@ -99,12 +99,12 @@ class LessonsSectionState extends State<LessonsSection> {
           isExpanded = {
             for (int i = 0; i < data.length; i++)
               "${(i + 1).toString().padLeft(2, '0')} - ${data[i]["title"]}":
-                  false
+              false
           };
           subtopicIds = {
             for (var sub in data)
               "${(data.indexOf(sub) + 1).toString().padLeft(2, '0')} - ${sub["title"]}":
-                  sub["id"].toString()
+              sub["id"].toString()
           };
         });
       } else {
@@ -197,7 +197,7 @@ class LessonsSectionState extends State<LessonsSection> {
           if (questionsResponse.statusCode == 200) {
             // Decode the response body using UTF-8
             final String questionsBody =
-                utf8.decode(questionsResponse.bodyBytes);
+            utf8.decode(questionsResponse.bodyBytes);
             List<dynamic> questionsData = jsonDecode(questionsBody);
             for (var question in questionsData) {
               quizzesList.add({
@@ -206,10 +206,10 @@ class LessonsSectionState extends State<LessonsSection> {
                 "difficulty": quiz["difficulty"] ?? "Unknown",
                 "question_count": questionsData.length.toString(),
                 "question_text":
-                    question["question_text"] ?? "No question text available",
+                question["question_text"] ?? "No question text available",
                 "options":
-                    (question["options"] as List<dynamic>?)?.cast<String>() ??
-                        ["No options available"],
+                (question["options"] as List<dynamic>?)?.cast<String>() ??
+                    ["No options available"],
                 "correct_option": question["correct_option"] ?? 0,
                 "created_at": quiz["created_at"] ?? "",
               });
@@ -313,42 +313,42 @@ class LessonsSectionState extends State<LessonsSection> {
           onPressed: isNavigating
               ? null
               : () {
-                  if (subtopicIds.isNotEmpty) {
-                    setState(() => isNavigating = true);
-                    final firstSubtopicId = subtopicIds.values.first;
-                    final firstSubtopicTitle = subtopicIds.keys.first;
-                    fetchMaterialsAndQuizzes(firstSubtopicId).then((_) {
-                      if (!context.mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => FlashCard(
-                            materials:
-                                (subtopicMaterials[firstSubtopicId] ?? [])
-                                    .map<Map<String, String>>((material) {
-                              return {
-                                "id": material["id"]?.toString() ?? "",
-                                "type": material["type"]?.toString() ?? "",
-                                "content":
-                                    material["content"]?.toString() ?? "",
-                              };
-                            }).toList(),
-                            quizzes: subtopicQuizzes[firstSubtopicId] ?? [],
-                            onQuizComplete: () =>
-                                _navigateToNextSubtopic(firstSubtopicId),
-                            initialIndex: 0,
-                            courseId: widget.courseId,
-                            topicId: widget.topicId,
-                            subtopicId: firstSubtopicId,
-                            subtopicTitle: firstSubtopicTitle,
-                          ),
-                        ),
-                      ).then((_) {
-                        if (mounted) setState(() => isNavigating = false);
-                      });
-                    });
-                  }
-                },
+            if (subtopicIds.isNotEmpty) {
+              setState(() => isNavigating = true);
+              final firstSubtopicId = subtopicIds.values.first;
+              final firstSubtopicTitle = subtopicIds.keys.first;
+              fetchMaterialsAndQuizzes(firstSubtopicId).then((_) {
+                if (!context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FlashCard(
+                      materials:
+                      (subtopicMaterials[firstSubtopicId] ?? [])
+                          .map<Map<String, String>>((material) {
+                        return {
+                          "id": material["id"]?.toString() ?? "",
+                          "type": material["type"]?.toString() ?? "",
+                          "content":
+                          material["content"]?.toString() ?? "",
+                        };
+                      }).toList(),
+                      quizzes: subtopicQuizzes[firstSubtopicId] ?? [],
+                      onQuizComplete: () =>
+                          _navigateToNextSubtopic(firstSubtopicId),
+                      initialIndex: 0,
+                      courseId: widget.courseId,
+                      topicId: widget.topicId,
+                      subtopicId: firstSubtopicId,
+                      subtopicTitle: firstSubtopicTitle,
+                    ),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() => isNavigating = false);
+                });
+              });
+            }
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: AcademeTheme.appColor,
             minimumSize: const Size(double.infinity, 50),
@@ -431,20 +431,20 @@ class LessonsSectionState extends State<LessonsSection> {
     String localizedType = type.toLowerCase() == 'video'
         ? L10n.getTranslatedText(context, 'Video')
         : type.toLowerCase() == 'text'
-            ? L10n.getTranslatedText(context, 'Text')
-            : type.toLowerCase() == 'quiz'
-                ? L10n.getTranslatedText(context, 'Quiz')
-                : type.toLowerCase() == 'document'
-                    ? L10n.getTranslatedText(context, 'Document')
-                    : L10n.getTranslatedText(context, 'Material');
+        ? L10n.getTranslatedText(context, 'Text')
+        : type.toLowerCase() == 'quiz'
+        ? L10n.getTranslatedText(context, 'Quiz')
+        : type.toLowerCase() == 'document'
+        ? L10n.getTranslatedText(context, 'Document')
+        : L10n.getTranslatedText(context, 'Material');
 
     return _buildTile(
       localizedType, // Use localized type for display
       category,
       _getIconForContentType(type), // Keep original type for icon
-      () {
+          () {
         List<Map<String, String>> materials =
-            (subtopicMaterials[subtopicId] ?? []).map<Map<String, String>>((m) {
+        (subtopicMaterials[subtopicId] ?? []).map<Map<String, String>>((m) {
           return {
             "id": m["id"]?.toString() ?? "",
             "type": m["type"]?.toString() ?? "",
@@ -491,7 +491,7 @@ class LessonsSectionState extends State<LessonsSection> {
       title,
       "$difficulty • $questionCount Questions",
       Icons.quiz,
-      () {
+          () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -523,8 +523,8 @@ class LessonsSectionState extends State<LessonsSection> {
 
       fetchMaterialsAndQuizzes(nextSubtopicId).then((_) {
         List<Map<String, String>> nextMaterials =
-            (subtopicMaterials[nextSubtopicId] ?? [])
-                .map<Map<String, String>>((material) {
+        (subtopicMaterials[nextSubtopicId] ?? [])
+            .map<Map<String, String>>((material) {
           return {
             "id": material["id"]?.toString() ?? "",
             "type": material["type"]?.toString() ?? "",

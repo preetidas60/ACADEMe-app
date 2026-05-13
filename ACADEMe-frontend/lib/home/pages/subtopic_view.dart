@@ -63,7 +63,7 @@ class _SubtopicViewScreenState extends State<SubtopicViewScreen>
 
       // Get the language provider before async gap
       final languageProvider =
-          Provider.of<LanguageProvider>(context, listen: false);
+      Provider.of<LanguageProvider>(context, listen: false);
       final targetLanguage = languageProvider.locale.languageCode;
 
       final response = await http.get(
@@ -162,7 +162,7 @@ class _SubtopicViewScreenState extends State<SubtopicViewScreen>
     if (subtopicList.isEmpty) {
       return Center(
           child:
-              Text(L10n.getTranslatedText(context, 'No subtopics available')));
+          Text(L10n.getTranslatedText(context, 'No subtopics available')));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(20),
