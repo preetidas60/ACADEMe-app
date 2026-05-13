@@ -1,13 +1,13 @@
 import 'package:ACADEMe/started/pages/animated_splash.dart';
-import 'package:ACADEMe/home/pages/bottom_nav.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
 import 'package:ACADEMe/services/study_time_tracker.dart'; // Add this import
+import 'package:ACADEMe/app/pages/courses/controllers/course_controller.dart'; // Add this import
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'dart:io';
-import 'home/auth/role.dart';
+import 'app/auth/role.dart';
 import 'academe_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,7 +15,8 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:ACADEMe/providers/bottom_nav_provider.dart';
+import 'app/pages/bottom_nav/bottom_nav.dart';
+import 'app/pages/bottom_nav/providers/bottom_nav_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,6 +80,8 @@ void main() async {
             create: (context) => LanguageProvider()), // Language provider
         ChangeNotifierProvider(
             create: (context) => BottomNavProvider()), // BottomNav provider
+        ChangeNotifierProvider(
+            create: (context) => CourseController()), // Course controller provider
       ],
       child: const MyApp(),
     ),
