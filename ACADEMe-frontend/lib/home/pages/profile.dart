@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ACADEMe/home/auth/auth_service.dart';
-import '../../academe_theme.dart';
-import 'package:ACADEMe/introduction_page.dart';
+import 'package:ACADEMe/academe_theme.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
+import 'package:ACADEMe/started/pages/login_view.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -15,13 +19,102 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   late Locale _selectedLocale;
+  String selectedClass = 'Class 1';
+  Map<String, dynamic>? userDetails;
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _selectedLocale = const Locale('en');
     _loadLanguage();
+    _loadUserDetailsFromStorage();
+  }
+
+  Future<void> _loadUserDetailsFromStorage() async {
+    try {
+      final name = await _secureStorage.read(key: 'name');
+      final email = await _secureStorage.read(key: 'email');
+      final studentClass = await _secureStorage.read(key: 'student_class');
+      final photoUrl = await _secureStorage.read(key: 'photo_url');
+
+      if (mounted) {
+        setState(() {
+          userDetails = {
+            'name': name,
+            'email': email,
+            'student_class': studentClass,
+            'photo_url': photoUrl,
+          };
+          selectedClass = 'Class ${studentClass ?? '1'}';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading user details from storage: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load user details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateClass(String newClass) async {
+    try {
+      final accessToken = await _secureStorage.read(key: 'access_token');
+
+      if (accessToken == null) {
+        throw Exception('Access token not found');
+      }
+
+      final backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000';
+      final response = await http.patch(
+        Uri.parse('$backendUrl/api/users/update_class/'),
+        headers: {
+          'accept': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({'new_class': newClass}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            selectedClass = 'Class ${data['new_class']}';
+          });
+          await _secureStorage.write(key: 'student_class', value: data['new_class']);
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message']),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to update class: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error updating class: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update class: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadLanguage() async {
@@ -36,7 +129,7 @@ class _ProfilePageState extends State<ProfilePage> {
         languageProvider.setLocale(newLocale);
       }
       setState(() {
-        _selectedLocale = newLocale; // Ensure state is updated
+        _selectedLocale = newLocale;
       });
     });
   }
@@ -56,6 +149,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
@@ -78,20 +179,22 @@ class _ProfilePageState extends State<ProfilePage> {
         child: Column(
           children: [
             const SizedBox(height: 15),
-            const CircleAvatar(
+            CircleAvatar(
               radius: 50,
-              backgroundImage: AssetImage('assets/design_course/userImage.png'),
+              backgroundImage: userDetails?['photo_url'] != null && userDetails!['photo_url'].isNotEmpty
+                  ? NetworkImage(userDetails!['photo_url']) // Use the provided photo URL
+                  : const AssetImage('assets/design_course/userImage.png') as ImageProvider, // Fallback to a local asset
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Rahul Sharma',
+            Text(
+              userDetails?['name'] ?? 'Loading...',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const Text(
-              'rahulSharma23@gmail.com',
+            Text(
+              userDetails?['email'] ?? 'Loading...',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey,
@@ -137,6 +240,79 @@ class _ProfilePageState extends State<ProfilePage> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
+                    ListTile(
+                      leading: const Icon(
+                        Icons.class_outlined,
+                        color: Colors.blue,
+                        size: 30,
+                      ),
+                      title: const Text(
+                        "Class",
+                        style: TextStyle(fontSize: 20),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 0),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedClass,
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.black),
+                            onChanged: (value) {
+                              if (value != selectedClass) {
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (BuildContext context) {
+                                    return AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      title: const Text(
+                                        'Are you sure you want to change your class?',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                      ),
+                                      content: const Text(
+                                        'All your progress data will be erased for this class.\nYou will need to relogin to start your journey with a new Class',
+                                        style: TextStyle(fontSize: 16),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                          child: const Text(
+                                            'Cancel',
+                                            style: TextStyle(color: Colors.grey, fontSize: 16),
+                                          ),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            if (value != null) {
+                                              setState(() {
+                                                selectedClass = value!;
+                                              });
+                                              _updateClass(value!.replaceAll('Class ', ''));
+                                              Navigator.of(context).pop();
+                                            }
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          child: const Text('Yes'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+                              }
+                            },
+                            items: List.generate(12, (index) => DropdownMenuItem(
+                              value: 'Class ${index + 1}',
+                              child: Text('${index + 1}'),
+                            )),
+                          ),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                    ),
                     _ProfileOption(
                       icon: Icons.settings,
                       text: L10n.getTranslatedText(context, 'Settings'),
@@ -186,14 +362,19 @@ class _ProfilePageState extends State<ProfilePage> {
                           await AuthService().signOut();
                           print('✅ User signed out successfully');
 
-                          // Ensure UI updates instantly
-                          await Future.delayed(Duration.zero);
-
                           if (mounted) {
                             Navigator.pushAndRemoveUntil(
                               context,
-                              MaterialPageRoute(builder: (context) => const AcademeScreen()),
+                              MaterialPageRoute(builder: (context) => const LogInView()),
                                   (route) => false,
+                            );
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  L10n.getTranslatedText(context, 'You have been logged out'),
+                                ),
+                              ),
                             );
                           }
                         } catch (e) {
@@ -220,7 +401,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             isExpanded: true,
                             onChanged: (Locale? newLocale) {
                               if (newLocale != null) {
-                                _changeLanguage(newLocale); // Call the function
+                                _changeLanguage(newLocale);
                               }
                             },
                             items: L10n.supportedLocales.map((Locale locale) {

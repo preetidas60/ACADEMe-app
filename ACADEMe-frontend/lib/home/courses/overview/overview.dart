@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'Q&A.dart';
@@ -20,7 +21,7 @@ class _OverviewScreenState extends State<OverviewScreen> with SingleTickerProvid
   late TabController _tabController;
   late ScrollController _scrollController;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
-  final String backendUrl = 'http://10.0.2.2:8000';
+  final String backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://127.0.0.1:8000';
 
   String topicTitle = "Loading...";
   String topicDescription = "Fetching topic details...";
@@ -106,7 +107,7 @@ class _OverviewScreenState extends State<OverviewScreen> with SingleTickerProvid
               /// **🔹 Responsive Gradient Header**
               Container(
                 width: double.infinity,
-                height: screenHeight * 0.3, // 30% of the screen height
+                height: screenHeight * 0.37, // 30% of the screen height
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Color(0xFF967EF6), Color(0xFFE8DAF9)],
