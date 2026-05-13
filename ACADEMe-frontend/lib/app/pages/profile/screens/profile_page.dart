@@ -5,11 +5,32 @@ import 'package:ACADEMe/academe_theme.dart';
 import 'package:ACADEMe/localization/l10n.dart';
 import 'package:ACADEMe/localization/language_provider.dart';
 import 'package:ACADEMe/started/pages/login_view.dart';
+import '../../../../started/pages/class.dart';
+import '../../../common/widgets/coming_soon_popup.dart';
 import '../controllers/profile_controller.dart';
 import '../models/user_model.dart';
-import '../widgets/profile_class.dart';
 import '../widgets/profile_dropdown.dart';
 import '../widgets/language_selection_bottom_sheet.dart';
+import '../widgets/policy.dart';
+
+// Define enum for better type safety
+enum ProfileOptionType {
+  settings,
+  billing,
+  termsPolicy,
+  redeemPoints,
+  other,
+}
+
+class ProfileOptionConfig {
+  final ProfileOptionType type;
+  final String descriptionKey;
+
+  const ProfileOptionConfig({
+    required this.type,
+    required this.descriptionKey,
+  });
+}
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,12 +46,49 @@ class ProfilePageState extends State<ProfilePage> {
   UserModel? userDetails;
   bool isLoading = true;
 
-  // Cache variables
-  static UserModel? _cachedUserDetails;
-  static Locale? _cachedLocale;
-  static String? _cachedClass;
-  static DateTime? _lastFetchTime;
-  static const Duration _cacheExpiry = Duration(minutes: 10); // Cache expires after 10 minutes
+  UserModel? _currentUserDetails;
+  Locale? _currentLocale;
+  String? _currentClass;
+
+  // Configuration map for options (alternative approach)
+  static const Map<String, ProfileOptionConfig> _optionConfigs = {
+    'Settings': ProfileOptionConfig(
+      type: ProfileOptionType.settings,
+      descriptionKey: 'settings_description',
+    ),
+    'Terms and Policy': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    'नियम और नीति': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    'Nutzungsbedingungen und Richtlinien': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    '条款与政策': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    'Conditions générales et politique': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    'Términos y política': ProfileOptionConfig(
+      type: ProfileOptionType.termsPolicy,
+      descriptionKey: 'terms_description',
+    ),
+    'Redeem Me Points': ProfileOptionConfig(
+      type: ProfileOptionType.redeemPoints,
+      descriptionKey: 'redeem_description',
+    ),
+    'Billing Details': ProfileOptionConfig(
+      type: ProfileOptionType.billing,
+      descriptionKey: 'billing_description',
+    ),
+  };
 
   @override
   void initState() {
@@ -41,41 +99,15 @@ class ProfilePageState extends State<ProfilePage> {
   Future<void> _initData() async {
     _selectedLocale = const Locale('en');
 
-    // Check if we have valid cached data
-    if (_isCacheValid()) {
-      _loadFromCache();
-    } else {
-      await _loadLanguage();
-      await _loadUserDetails();
-    }
-  }
-
-  bool _isCacheValid() {
-    if (_cachedUserDetails == null || _cachedLocale == null || _lastFetchTime == null) {
-      return false;
-    }
-
-    final now = DateTime.now();
-    return now.difference(_lastFetchTime!) < _cacheExpiry;
-  }
-
-  void _loadFromCache() {
-    setState(() {
-      userDetails = _cachedUserDetails;
-      _selectedLocale = _cachedLocale!;
-      selectedClass = _cachedClass ?? 'SELECT';
-      isLoading = false;
-    });
-
-    // Update language provider if needed
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
-    if (languageProvider.locale != _cachedLocale) {
-      languageProvider.setLocale(_cachedLocale!);
-    }
+    // Always load fresh data, no cache checking
+    await _loadLanguage();
+    await _loadUserDetails();
   }
 
   Future<void> _loadUserDetails() async {
     try {
+      setState(() => isLoading = true);
+
       final details = await _controller.loadUserDetails();
       final newUserDetails = UserModel(
         name: details['name'],
@@ -86,14 +118,11 @@ class ProfilePageState extends State<ProfilePage> {
 
       setState(() {
         userDetails = newUserDetails;
-        selectedClass = details['student_class'] ?? 'SELECT';
+        selectedClass = details['student_class']?.isNotEmpty == true
+            ? details['student_class']
+            : null;
         isLoading = false;
       });
-
-      // Update cache
-      _cachedUserDetails = newUserDetails;
-      _cachedClass = selectedClass;
-      _lastFetchTime = DateTime.now();
     } catch (e) {
       setState(() => isLoading = false);
       _showErrorSnackbar(e.toString());
@@ -104,48 +133,19 @@ class ProfilePageState extends State<ProfilePage> {
     final locale = await _controller.loadLanguage();
     if (!mounted) return;
 
-    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final languageProvider =
+        Provider.of<LanguageProvider>(context, listen: false);
     if (languageProvider.locale != locale) {
       languageProvider.setLocale(locale);
     }
 
     setState(() => _selectedLocale = locale);
-
-    // Update cache
-    _cachedLocale = locale;
-    if (_lastFetchTime == null) {
-      _lastFetchTime = DateTime.now();
-    }
   }
 
-  // Method to refresh data and clear cache
   Future<void> _refreshData() async {
     setState(() => isLoading = true);
-    _clearCache();
     await _loadLanguage();
     await _loadUserDetails();
-  }
-
-  // Method to clear cache (useful when user updates profile)
-  static void _clearCache() {
-    _cachedUserDetails = null;
-    _cachedLocale = null;
-    _cachedClass = null;
-    _lastFetchTime = null;
-  }
-
-  // Method to update cache when class is changed
-  void _updateClassCache(String newClass) {
-    _cachedClass = newClass;
-    selectedClass = newClass;
-    if (_cachedUserDetails != null) {
-      _cachedUserDetails = UserModel(
-        name: _cachedUserDetails!.name,
-        email: _cachedUserDetails!.email,
-        studentClass: newClass,
-        photoUrl: _cachedUserDetails!.photoUrl,
-      );
-    }
   }
 
   void _showErrorSnackbar(String error) {
@@ -164,6 +164,7 @@ class ProfilePageState extends State<ProfilePage> {
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(60),
         child: AppBar(
+          automaticallyImplyLeading: false,
           backgroundColor: AcademeTheme.appColor,
           title: Text(
             L10n.getTranslatedText(context, 'Profile'),
@@ -186,12 +187,12 @@ class ProfilePageState extends State<ProfilePage> {
       body: isLoading
           ? const ProfilePageShimmer()
           : RefreshIndicator(
-        onRefresh: _refreshData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: _buildProfileContent(),
-        ),
-      ),
+              onRefresh: _refreshData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: _buildProfileContent(),
+              ),
+            ),
     );
   }
 
@@ -214,10 +215,10 @@ class ProfilePageState extends State<ProfilePage> {
     return CircleAvatar(
       radius: 50,
       backgroundImage:
-      userDetails?.photoUrl != null && userDetails!.photoUrl!.isNotEmpty
-          ? NetworkImage(userDetails!.photoUrl!)
-          : const AssetImage('assets/design_course/userImage.png')
-      as ImageProvider,
+          userDetails?.photoUrl != null && userDetails!.photoUrl!.isNotEmpty
+              ? NetworkImage(userDetails!.photoUrl!)
+              : const AssetImage('assets/design_course/userImage.png')
+                  as ImageProvider,
     );
   }
 
@@ -225,7 +226,7 @@ class ProfilePageState extends State<ProfilePage> {
     return Column(
       children: [
         Text(
-          userDetails?.name ?? 'Loading...',
+          userDetails?.name ?? 'User',
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
         Text(
@@ -239,8 +240,15 @@ class ProfilePageState extends State<ProfilePage> {
   Widget _buildEditButton() {
     return ElevatedButton(
       onPressed: () {
-        // When edit profile is implemented, clear cache after editing
-        // _clearCache();
+        showDialog(
+          context: context,
+          builder: (context) => ComingSoonPopup(
+            featureName: L10n.getTranslatedText(context, 'Edit Profile'),
+            icon: Icons.edit,
+            description: L10n.getTranslatedText(
+                context, 'Customize your profile information and preferences'),
+          ),
+        );
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.yellow,
@@ -266,18 +274,22 @@ class ProfilePageState extends State<ProfilePage> {
         _buildProfileOption(
           icon: Icons.settings,
           text: L10n.getTranslatedText(context, 'Settings'),
+          optionType: ProfileOptionType.settings,
         ),
-        _buildProfileOption(
-          icon: Icons.credit_card,
-          text: L10n.getTranslatedText(context, 'Billing Details'),
-        ),
+        // _buildProfileOption(
+        //   icon: Icons.credit_card,
+        //   text: L10n.getTranslatedText(context, 'Billing Details'),
+        //   optionType: ProfileOptionType.billing,
+        // ),
         _buildProfileOption(
           icon: Icons.info,
-          text: L10n.getTranslatedText(context, 'Information'),
+          text: L10n.getTranslatedText(context, 'Terms and Policy'),
+          optionType: ProfileOptionType.termsPolicy,
         ),
         _buildProfileOption(
           icon: Icons.card_giftcard,
           text: L10n.getTranslatedText(context, 'Redeem Me Points'),
+          optionType: ProfileOptionType.redeemPoints,
         ),
         _buildLogoutOption(),
         const SizedBox(height: 20),
@@ -294,10 +306,20 @@ class ProfilePageState extends State<ProfilePage> {
         trailingWidget: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(selectedClass ?? 'SELECT',
-                style: const TextStyle(fontSize: 16)),
+            Text(
+              selectedClass ?? L10n.getTranslatedText(context, 'SELECT'),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontSize: 16,
+                    color: selectedClass != null
+                        ? Theme.of(context).textTheme.bodyLarge?.color
+                        : Theme.of(context).hintColor,
+                  ),
+            ),
             const SizedBox(width: 8),
-            const Icon(Icons.arrow_drop_down, color: Colors.black),
+            Icon(
+              Icons.arrow_drop_down,
+              color: Theme.of(context).iconTheme.color ?? Colors.black,
+            ),
           ],
         ),
       ),
@@ -310,8 +332,11 @@ class ProfilePageState extends State<ProfilePage> {
       child: ReusableProfileOption(
         icon: Icons.translate,
         title: L10n.getTranslatedText(context, 'language'),
-        trailingWidget:
-        Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey[500]),
+        trailingWidget: Icon(
+          Icons.arrow_forward_ios,
+          size: 18,
+          color: Theme.of(context).hintColor,
+        ),
       ),
     );
   }
@@ -319,13 +344,93 @@ class ProfilePageState extends State<ProfilePage> {
   Widget _buildProfileOption({
     required IconData icon,
     required String text,
+    ProfileOptionType optionType = ProfileOptionType.other,
   }) {
     return ProfileOption(
       icon: icon,
       text: text,
       iconColor: AcademeTheme.appColor,
-      onTap: () {},
+      onTap: () => _handleProfileOptionTap(optionType, text, icon),
     );
+  }
+
+  void _handleProfileOptionTap(
+      ProfileOptionType type, String text, IconData icon) {
+    switch (type) {
+      case ProfileOptionType.settings:
+        _showComingSoonDialog(
+          text,
+          icon,
+          L10n.getTranslatedText(
+              context, 'Manage your app preferences and account settings.'),
+        );
+        break;
+
+      case ProfileOptionType.termsPolicy:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()),
+        );
+        break;
+
+      case ProfileOptionType.redeemPoints:
+        _showComingSoonDialog(
+          text,
+          icon,
+          L10n.getTranslatedText(
+              context, 'Use your earned points to unlock exclusive rewards.'),
+        );
+        break;
+
+      case ProfileOptionType.billing:
+        _showComingSoonDialog(
+          text,
+          icon,
+          L10n.getTranslatedText(
+              context, 'Manage your billing information and payment methods.'),
+        );
+        break;
+
+      case ProfileOptionType.other:
+      default:
+        _showComingSoonDialog(text, icon, '');
+        break;
+    }
+  }
+
+  void _showComingSoonDialog(
+      String featureName, IconData icon, String description) {
+    showDialog(
+      context: context,
+      builder: (context) => ComingSoonPopup(
+        featureName: featureName,
+        icon: icon,
+        description: description,
+      ),
+    );
+  }
+
+  // Alternative method using configuration map
+  void _handleProfileOptionTapAlternative(String text, IconData icon) {
+    final config = _optionConfigs[text];
+
+    if (config != null) {
+      switch (config.type) {
+        case ProfileOptionType.termsPolicy:
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PrivacyPolicyPage()),
+          );
+          break;
+        default:
+          final description =
+              L10n.getTranslatedText(context, config.descriptionKey);
+          _showComingSoonDialog(text, icon, description);
+          break;
+      }
+    } else {
+      _showComingSoonDialog(text, icon, '');
+    }
   }
 
   Widget _buildLogoutOption() {
@@ -346,11 +451,34 @@ class ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: ClassSelectionBottomSheet(
           onClassSelected: () async {
-            // Reload user details and update cache
+            // Set loading state
+            setState(() {
+              isLoading = true;
+            });
+
+            // Add a small delay to ensure the backend update is complete
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            // Reload user details from backend
             await _loadUserDetails();
+          },
+          // Add this callback for immediate UI update
+          onClassUpdated: (newClass) {
+            setState(() {
+              selectedClass = newClass;
+              if (userDetails != null) {
+                userDetails = UserModel(
+                  name: userDetails!.name,
+                  email: userDetails!.email,
+                  studentClass: newClass,
+                  photoUrl: userDetails!.photoUrl,
+                );
+              }
+            });
           },
         ),
       ),
@@ -368,8 +496,6 @@ class ProfilePageState extends State<ProfilePage> {
         selectedLocale: _selectedLocale,
         onLanguageSelected: (newLocale) async {
           await _controller.changeLanguage(newLocale, context);
-          // Update cache with new locale
-          _cachedLocale = newLocale;
           setState(() => _selectedLocale = newLocale);
         },
       ),
@@ -380,21 +506,18 @@ class ProfilePageState extends State<ProfilePage> {
     try {
       await AuthService().signOut();
 
-      // Clear cache on logout
-      _clearCache();
-
       if (!mounted) return;
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LogInView()),
-            (route) => false,
+        (route) => false,
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-          Text(L10n.getTranslatedText(context, 'You have been logged out')),
+              Text(L10n.getTranslatedText(context, 'You have been logged out')),
         ),
       );
     } catch (e) {
@@ -402,6 +525,8 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 }
+
+// ... rest of the file (shimmer components) remains unchanged ...
 
 // Base Shimmer Effect Widget
 class ShimmerEffect extends StatefulWidget {

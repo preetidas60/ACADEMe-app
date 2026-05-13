@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../academe_theme.dart';
 import '../../api_endpoints.dart';
 import '../../localization/l10n.dart';
+import 'manage_teachers.dart';
 import 'topic.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +21,7 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
   List<Map<String, dynamic>> courses = [];
   final _storage = FlutterSecureStorage();
   String? _targetLanguage;
+  bool isMenuOpen = false;
 
   @override
   void initState() {
@@ -49,21 +51,21 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type":
-            "application/json; charset=UTF-8", // Ensure UTF-8 encoding
+        "application/json; charset=UTF-8", // Ensure UTF-8 encoding
       },
     );
 
     if (response.statusCode == 200) {
       List<dynamic> data =
-          json.decode(utf8.decode(response.bodyBytes)); // Decode with UTF-8
+      json.decode(utf8.decode(response.bodyBytes)); // Decode with UTF-8
       setState(() {
         courses = data
             .map((item) => {
-                  "id": item["id"].toString(),
-                  "title": item["title"],
-                  "class_name": item["class_name"],
-                  "description": item["description"],
-                })
+          "id": item["id"].toString(),
+          "title": item["title"],
+          "class_name": item["class_name"],
+          "description": item["description"],
+        })
             .toList();
       });
     } else {
@@ -78,7 +80,7 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
         final TextEditingController titleController = TextEditingController();
         final TextEditingController classController = TextEditingController();
         final TextEditingController descriptionController =
-            TextEditingController();
+        TextEditingController();
 
         return AlertDialog(
           title: Text(L10n.getTranslatedText(context, 'Add Course')),
@@ -121,7 +123,7 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
                   headers: {
                     "Authorization": "Bearer $token",
                     "Content-Type":
-                        "application/json; charset=UTF-8", // Ensure UTF-8 encoding
+                    "application/json; charset=UTF-8", // Ensure UTF-8 encoding
                   },
                   body: json.encode({
                     "title": titleController.text,
@@ -151,6 +153,112 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
     );
   }
 
+  void _manageTeachers() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final TextEditingController emailController = TextEditingController();
+        List<String> teacherEmails = [];
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(L10n.getTranslatedText(context, 'Manage Teachers')),
+              content: Container(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: emailController,
+                      decoration: InputDecoration(
+                        labelText:
+                        L10n.getTranslatedText(context, 'Teacher Email'),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.add),
+                          onPressed: () {
+                            if (emailController.text.isNotEmpty) {
+                              setDialogState(() {
+                                teacherEmails.add(emailController.text);
+                                emailController.clear();
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    if (teacherEmails.isNotEmpty)
+                      Container(
+                        height: 200,
+                        child: ListView.builder(
+                          itemCount: teacherEmails.length,
+                          itemBuilder: (context, index) {
+                            return ListTile(
+                              title: Text(teacherEmails[index]),
+                              trailing: IconButton(
+                                icon: Icon(Icons.remove),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    teacherEmails.removeAt(index);
+                                  });
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(L10n.getTranslatedText(context, 'Cancel')),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await _submitTeacherEmails(teacherEmails);
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                  },
+                  child: Text(L10n.getTranslatedText(context, 'Save')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitTeacherEmails(List<String> emails) async {
+    String? token = await _storage.read(key: "access_token");
+    if (token == null) return;
+
+    try {
+      final response = await http.post(
+        ApiEndpoints.getUri('/api/admin/teachers/manage'),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json; charset=UTF-8",
+        },
+        body: json.encode({"teacher_emails": emails}),
+      );
+
+      if (response.statusCode == 200) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(L10n.getTranslatedText(
+                  context, 'Teachers updated successfully'))),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error updating teachers: $e");
+    }
+  }
+
   void _navigateToTopics(String courseId, String courseTitle) {
     Navigator.push(
       context,
@@ -161,57 +269,134 @@ class CourseManagementScreenState extends State<CourseManagementScreen> {
     );
   }
 
+  Widget _buildMenuItem(String label, IconData icon, VoidCallback onTap) {
+    return FloatingActionButton.extended(
+      heroTag: label, // unique tag to prevent hero conflicts
+      onPressed: onTap,
+      icon: Icon(icon, color: Colors.white),
+      label: Text(label, style: TextStyle(color: Colors.white)),
+      backgroundColor: AcademeTheme.appColor,
+    );
+  }
+
+
+  // Updated main widget with tabs
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AcademeTheme.appColor,
-        title: Text(L10n.getTranslatedText(context, 'Admin Panel'),
-            style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: AcademeTheme.appColor,
+          title: Text(
+            L10n.getTranslatedText(context, 'Admin Panel'),
+            style: TextStyle(color: Colors.white),
+          ),
+          centerTitle: true,
+          // ❌ remove TabBar from here
+        ),
+        body: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  L10n.getTranslatedText(context, 'Course List'),
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+            // ✅ TabBar BELOW AppBar
+            Material(
+              color: Colors.white,
+              child: TabBar(
+                indicatorColor: AcademeTheme.appColor,
+                labelColor: AcademeTheme.appColor,
+                unselectedLabelColor: Colors.black38,
+                tabs: [
+                  Tab(
+                    icon: Icon(Icons.book),
+                    text:
+                    L10n.getTranslatedText(context, 'Self Study Material'),
+                  ),
+                  Tab(
+                    icon: Icon(Icons.school),
+                    text:
+                    L10n.getTranslatedText(context, 'Manage Teachers'),
+                  ),
+                ],
               ),
             ),
+            // ✅ TabBarView takes the remaining space
             Expanded(
-              child: courses.isEmpty
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: AcademeTheme.appColor, // Custom color
-                      ),
-                    )
-                  : ListView(
-                      children: courses
-                          .map((course) => Card(
+              child: TabBarView(
+                children: [
+                  // Self Study Material Tab
+                  Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10.0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              L10n.getTranslatedText(context, 'Course List'),
+                              style: TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: courses.isEmpty
+                              ? Center(
+                            child: CircularProgressIndicator(
+                              color: AcademeTheme.appColor,
+                            ),
+                          )
+                              : ListView(
+                            children: courses
+                                .map(
+                                  (course) => Card(
+                                color: Colors.white,
                                 margin: EdgeInsets.only(bottom: 10),
                                 child: ListTile(
                                   title: Text(course["title"]!),
-                                  subtitle: Text(course["description"]!),
+                                  subtitle:
+                                  Text(course["description"]!),
                                   onTap: () => _navigateToTopics(
-                                      course["id"]!, course["title"]!),
+                                      course["id"]!,
+                                      course["title"]!),
                                 ),
-                              ))
-                          .toList(),
+                              ),
+                            )
+                                .toList(),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  // Manage Teachers Tab
+                  ManageTeachersTab(),
+                ],
+              ),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addCourse,
-        backgroundColor: AcademeTheme.appColor,
-        child: Icon(Icons.add, color: Colors.white),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (isMenuOpen) ...[
+              _buildMenuItem(
+                L10n.getTranslatedText(context, 'Add Course'),
+                Icons.add,
+                _addCourse,
+              ),
+              SizedBox(height: 10),
+            ],
+            FloatingActionButton(
+              onPressed: () => setState(() => isMenuOpen = !isMenuOpen),
+              backgroundColor: AcademeTheme.appColor,
+              child: Icon(
+                isMenuOpen ? Icons.close : Icons.add,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

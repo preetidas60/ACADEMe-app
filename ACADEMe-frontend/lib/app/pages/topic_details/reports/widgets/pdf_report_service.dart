@@ -17,6 +17,10 @@ class PdfReportService {
   String? userName;
   Map<String, String?> _userDetails = {};
 
+  static pw.Font? _regularFont;
+  static pw.Font? _boldFont;
+  static bool _fontsLoaded = false;
+
   // Enhanced color scheme
   static const PdfColor primaryBlue = PdfColor.fromInt(0xFF1E3A8A);
   static const PdfColor secondaryBlue = PdfColor.fromInt(0xFF3B82F6);
@@ -28,9 +32,12 @@ class PdfReportService {
   static const PdfColor lightGray = PdfColor.fromInt(0xFFF9FAFB);
   static const PdfColor borderGray = PdfColor.fromInt(0xFFE5E7EB);
 
+  final Function(String) getTranslatedText;
+
   PdfReportService({
     required this.controller,
     required this.logoImageBytes,
+    required this.getTranslatedText,
     this.userName,
   });
 
@@ -39,22 +46,49 @@ class PdfReportService {
     return data.buffer.asUint8List();
   }
 
+  static Future<void> _loadFonts() async {
+    if (_fontsLoaded) return;
+
+    try {
+      // Load Noto Sans font that supports multiple languages including Hindi, Chinese, etc.
+      final regularFontData =
+          await rootBundle.load('assets/fonts/NotoSans-Regular.ttf');
+      final boldFontData =
+          await rootBundle.load('assets/fonts/NotoSans-Bold.ttf');
+
+      _regularFont = pw.Font.ttf(regularFontData);
+      _boldFont = pw.Font.ttf(boldFontData);
+      _fontsLoaded = true;
+    } catch (e) {
+      debugPrint('Error loading fonts, using default: $e');
+      // Fallback to system fonts
+      _regularFont = await PdfGoogleFonts.notoSansRegular();
+      _boldFont = await PdfGoogleFonts.notoSansBold();
+      _fontsLoaded = true;
+    }
+  }
+
   static Future<PdfReportService> create({
     required TestReportController controller,
     required String logoAssetPath,
+    required Function(String) getTranslatedText,
     String? userName,
   }) async {
+    // Load fonts first
+    await _loadFonts();
+
     final logoBytes = await _loadImageBytes(logoAssetPath);
     final service = PdfReportService(
       controller: controller,
       logoImageBytes: logoBytes,
+      getTranslatedText: getTranslatedText,
       userName: userName,
     );
-    
+
     if (service.userName == null) {
       await service._loadUserNameFromStorage();
     }
-    
+
     return service;
   }
 
@@ -66,9 +100,12 @@ class PdfReportService {
     try {
       final String? name = await _secureStorage.read(key: 'name');
       final String? photoUrl = await _secureStorage.read(key: 'photo_url');
+      final String? studentClass =
+          await _secureStorage.read(key: 'student_class');
       _userDetails = {
         'name': name,
         'photo_url': photoUrl,
+        'class': studentClass,
       };
       return _userDetails;
     } catch (e) {
@@ -76,6 +113,7 @@ class PdfReportService {
       return {
         'name': null,
         'photo_url': null,
+        'class': null,
       };
     }
   }
@@ -96,22 +134,22 @@ class PdfReportService {
       if (userName == null) {
         await _loadUserNameFromStorage();
       }
-      
+
       final pdf = await _generateReportDocument();
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
       );
     } catch (e) {
-      throw Exception('Failed to generate report: $e');
+      throw Exception('${getTranslatedText('Failed to generate report')}: $e');
     }
   }
 
-  Future<void> shareScore({required Function(String) getTranslatedText}) async {
+  Future<void> shareScore() async {
     try {
       if (userName == null) {
         await _loadUserNameFromStorage();
       }
-      
+
       final pdf = await _generateReportDocument();
       final directory = await getTemporaryDirectory();
       final file = File('${directory.path}/quiz_report_share.pdf');
@@ -171,7 +209,8 @@ class PdfReportService {
                   pw.SizedBox(height: 16), // Reduced spacing
                   _buildCompactScoreOverviewCard(topicScore, correct, total),
                   pw.SizedBox(height: 16), // Reduced spacing
-                  _buildCompactDetailedMetricsCard(correct, incorrect, skipped, total),
+                  _buildCompactDetailedMetricsCard(
+                      correct, incorrect, skipped, total),
                   pw.SizedBox(height: 8), // Much smaller space before footer
                   _buildCompactFooter(),
                 ],
@@ -195,7 +234,8 @@ class PdfReportService {
         ),
       ),
       child: pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 12), // Reduced padding
+        padding: const pw.EdgeInsets.symmetric(
+            horizontal: 24, vertical: 12), // Reduced padding
         child: pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
@@ -204,21 +244,21 @@ class PdfReportService {
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Text(
-                  'QUIZ PERFORMANCE REPORT',
+                  getTranslatedText('QUIZ PERFORMANCE REPORT'),
                   style: pw.TextStyle(
                     fontSize: 20, // Reduced from 24
-                    fontWeight: pw.FontWeight.bold,
+                    font: _boldFont,
                     color: PdfColors.white,
                     letterSpacing: 1.0,
                   ),
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
-                  'ACADEMe Assessment Platform',
+                  getTranslatedText('ACADEMe Assessment Platform'),
                   style: pw.TextStyle(
                     fontSize: 10, // Reduced from 12
                     color: PdfColors.white,
-                    fontWeight: pw.FontWeight.normal,
+                    font: _regularFont,
                   ),
                 ),
               ],
@@ -240,7 +280,7 @@ class PdfReportService {
   pw.Widget _buildCompactUserInfoCard() {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(16), // Reduced padding
+      padding: const pw.EdgeInsets.all(16),
       decoration: pw.BoxDecoration(
         color: lightBlue,
         borderRadius: pw.BorderRadius.circular(10),
@@ -248,9 +288,8 @@ class PdfReportService {
       ),
       child: pw.Row(
         children: [
-          // Smaller User Avatar/Icon
           pw.Container(
-            width: 48, // Reduced from 60
+            width: 48,
             height: 48,
             decoration: pw.BoxDecoration(
               color: primaryBlue,
@@ -258,12 +297,12 @@ class PdfReportService {
             ),
             child: pw.Center(
               child: pw.Text(
-                userName != null && userName!.isNotEmpty 
-                  ? userName!.substring(0, 1).toUpperCase()
-                  : 'S',
+                userName != null && userName!.isNotEmpty
+                    ? userName!.substring(0, 1).toUpperCase()
+                    : 'S',
                 style: pw.TextStyle(
-                  fontSize: 20, // Reduced from 24
-                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 20,
+                  font: _boldFont,
                   color: PdfColors.white,
                 ),
               ),
@@ -275,26 +314,32 @@ class PdfReportService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'Student Information',
+                  getTranslatedText('Student Information'),
                   style: pw.TextStyle(
                     fontSize: 10,
                     color: neutralGray,
-                    fontWeight: pw.FontWeight.normal,
+                    font: _regularFont,
                   ),
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
                   userName ?? 'Student',
                   style: pw.TextStyle(
-                    fontSize: 16, // Reduced from 20
-                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 16,
+                    font: _boldFont,
                     color: primaryBlue,
                   ),
                 ),
                 pw.SizedBox(height: 6),
-                _buildInfoRow('Course:', controller.courseTitle),
+                _buildInfoRow(
+                    '${getTranslatedText('Class')}:',
+                    _userDetails['class'] ??
+                        getTranslatedText('Not specified')),
+                _buildInfoRow(
+                    '${getTranslatedText('Course')}:', controller.courseTitle),
                 pw.SizedBox(height: 2),
-                _buildInfoRow('Topic:', controller.topicTitle),
+                _buildInfoRow(
+                    '${getTranslatedText('Topic')}:', controller.topicTitle),
               ],
             ),
           ),
@@ -311,7 +356,7 @@ class PdfReportService {
           style: pw.TextStyle(
             fontSize: 11, // Reduced from 12
             color: neutralGray,
-            fontWeight: pw.FontWeight.bold,
+            font: _boldFont,
           ),
         ),
         pw.SizedBox(width: 6),
@@ -321,7 +366,7 @@ class PdfReportService {
             style: pw.TextStyle(
               fontSize: 11,
               color: primaryBlue,
-              fontWeight: pw.FontWeight.normal,
+              font: _regularFont,
             ),
           ),
         ),
@@ -329,7 +374,8 @@ class PdfReportService {
     );
   }
 
-  pw.Widget _buildCompactScoreOverviewCard(double score, int correct, int total) {
+  pw.Widget _buildCompactScoreOverviewCard(
+      double score, int correct, int total) {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.all(18), // Reduced padding
@@ -362,13 +408,14 @@ class PdfReportService {
                     style: pw.TextStyle(
                       fontSize: 24, // Reduced from 32
                       color: PdfColors.white,
-                      fontWeight: pw.FontWeight.bold,
+                      font: _boldFont,
                     ),
                   ),
                   pw.Text(
-                    'SCORE',
+                    getTranslatedText('SCORE'),
                     style: pw.TextStyle(
                       fontSize: 8,
+                      font: _boldFont,
                       color: PdfColors.white,
                       letterSpacing: 1,
                     ),
@@ -383,10 +430,10 @@ class PdfReportService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
-                  'Overall Performance',
+                  getTranslatedText('Overall Performance'),
                   style: pw.TextStyle(
                     fontSize: 18, // Reduced from 24
-                    fontWeight: pw.FontWeight.bold,
+                    font: _boldFont,
                     color: primaryBlue,
                   ),
                 ),
@@ -396,15 +443,18 @@ class PdfReportService {
                   style: pw.TextStyle(
                     fontSize: 14, // Reduced from 16
                     color: _getScoreColor(score),
-                    fontWeight: pw.FontWeight.bold,
+                    font: _boldFont,
                   ),
                 ),
                 pw.SizedBox(height: 12),
-                _buildScoreDetailRow('Correct Answers:', '$correct out of $total'),
+                _buildScoreDetailRow('${getTranslatedText('Correct Answers')}:',
+                    '$correct ${getTranslatedText('out of')} $total'),
                 pw.SizedBox(height: 6),
-                _buildScoreDetailRow('Accuracy Rate:', '${score.toStringAsFixed(1)}%'),
+                _buildScoreDetailRow('${getTranslatedText('Accuracy Rate')}:',
+                    '${score.toStringAsFixed(1)}%'),
                 pw.SizedBox(height: 6),
-                _buildScoreDetailRow('Completion Date:', DateFormat('MMM dd, yyyy').format(DateTime.now())),
+                _buildScoreDetailRow('${getTranslatedText('Completion Date')}:',
+                    DateFormat('MMM dd, yyyy').format(DateTime.now())),
               ],
             ),
           ),
@@ -421,7 +471,7 @@ class PdfReportService {
           style: pw.TextStyle(
             fontSize: 12, // Reduced from 14
             color: neutralGray,
-            fontWeight: pw.FontWeight.normal,
+            font: _regularFont,
           ),
         ),
         pw.SizedBox(width: 6),
@@ -430,14 +480,15 @@ class PdfReportService {
           style: pw.TextStyle(
             fontSize: 12,
             color: primaryBlue,
-            fontWeight: pw.FontWeight.bold,
+            font: _boldFont,
           ),
         ),
       ],
     );
   }
 
-  pw.Widget _buildCompactDetailedMetricsCard(int correct, int incorrect, int skipped, int total) {
+  pw.Widget _buildCompactDetailedMetricsCard(
+      int correct, int incorrect, int skipped, int total) {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.all(18), // Reduced padding
@@ -450,10 +501,10 @@ class PdfReportService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'Detailed Performance Breakdown',
+            getTranslatedText('Detailed Performance Breakdown'),
             style: pw.TextStyle(
               fontSize: 16, // Reduced from 20
-              fontWeight: pw.FontWeight.bold,
+              font: _boldFont,
               color: primaryBlue,
             ),
           ),
@@ -461,10 +512,22 @@ class PdfReportService {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
             children: [
-              _buildCompactMetricCard('Correct', '$correct', successGreen, '${(correct / total * 100).toStringAsFixed(1)}%'),
-              _buildCompactMetricCard('Incorrect', '$incorrect', errorRed, '${(incorrect / total * 100).toStringAsFixed(1)}%'),
+              _buildCompactMetricCard(
+                  getTranslatedText('Correct'),
+                  '$correct',
+                  successGreen,
+                  '${(correct / total * 100).toStringAsFixed(1)}%'),
+              _buildCompactMetricCard(
+                  getTranslatedText('Incorrect'),
+                  '$incorrect',
+                  errorRed,
+                  '${(incorrect / total * 100).toStringAsFixed(1)}%'),
               if (skipped > 0)
-                _buildCompactMetricCard('Skipped', '$skipped', warningOrange, '${(skipped / total * 100).toStringAsFixed(1)}%'),
+                _buildCompactMetricCard(
+                    getTranslatedText('Skipped'),
+                    '$skipped',
+                    warningOrange,
+                    '${(skipped / total * 100).toStringAsFixed(1)}%'),
             ],
           ),
           pw.SizedBox(height: 14),
@@ -474,7 +537,8 @@ class PdfReportService {
     );
   }
 
-  pw.Widget _buildCompactMetricCard(String title, String value, PdfColor color, String percentage) {
+  pw.Widget _buildCompactMetricCard(
+      String title, String value, PdfColor color, String percentage) {
     return pw.Container(
       width: 100, // Reduced from 120
       padding: const pw.EdgeInsets.all(12), // Reduced padding
@@ -490,7 +554,7 @@ class PdfReportService {
             style: pw.TextStyle(
               fontSize: 10, // Reduced from 12
               color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
+              font: _boldFont,
             ),
           ),
           pw.SizedBox(height: 6),
@@ -499,7 +563,7 @@ class PdfReportService {
             style: pw.TextStyle(
               fontSize: 20, // Reduced from 24
               color: PdfColors.white,
-              fontWeight: pw.FontWeight.bold,
+              font: _boldFont,
             ),
           ),
           pw.SizedBox(height: 2),
@@ -507,6 +571,7 @@ class PdfReportService {
             percentage,
             style: pw.TextStyle(
               fontSize: 9,
+              font: _regularFont,
               color: PdfColors.white,
             ),
           ),
@@ -515,7 +580,8 @@ class PdfReportService {
     );
   }
 
-  pw.Widget _buildCompactProgressBar(int correct, int incorrect, int skipped, int total) {
+  pw.Widget _buildCompactProgressBar(
+      int correct, int incorrect, int skipped, int total) {
     final correctWidth = (correct / total) * 320; // Reduced bar width
     final incorrectWidth = (incorrect / total) * 320;
     final skippedWidth = (skipped / total) * 320;
@@ -524,10 +590,10 @@ class PdfReportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          'Performance Distribution',
+          getTranslatedText('Performance Distribution'),
           style: pw.TextStyle(
             fontSize: 12, // Reduced from 14
-            fontWeight: pw.FontWeight.bold,
+            font: _boldFont,
             color: primaryBlue,
           ),
         ),
@@ -592,18 +658,19 @@ class PdfReportService {
           mainAxisAlignment: pw.MainAxisAlignment.center,
           children: [
             pw.Text(
-              'Generated by ACADEMe Assessment Platform',
+              getTranslatedText('Generated by ACADEMe Assessment Platform'),
               style: pw.TextStyle(
                 fontSize: 10, // Reduced from 12
                 color: primaryBlue,
-                fontWeight: pw.FontWeight.bold,
+                font: _boldFont,
               ),
             ),
             pw.SizedBox(height: 2),
             pw.Text(
-              'Report generated on ${DateFormat('EEEE, MMMM dd, yyyy \'at\' hh:mm a').format(DateTime.now())}',
+              '${getTranslatedText('Report generated on')} ${DateFormat('EEEE, MMMM dd, yyyy \'at\' hh:mm a').format(DateTime.now())}',
               style: pw.TextStyle(
                 fontSize: 8, // Reduced from 10
+                font: _regularFont,
                 color: neutralGray,
               ),
             ),
@@ -626,10 +693,10 @@ class PdfReportService {
   }
 
   String _getPerformanceDescription(double score) {
-    if (score >= 90) return 'Outstanding Performance!';
-    if (score >= 80) return 'Excellent Work!';
-    if (score >= 70) return 'Good Performance';
-    if (score >= 60) return 'Fair Performance';
-    return 'Needs Improvement';
+    if (score >= 90) return getTranslatedText('Outstanding Performance!');
+    if (score >= 80) return getTranslatedText('Excellent Work!');
+    if (score >= 70) return getTranslatedText('Good Performance');
+    if (score >= 60) return getTranslatedText('Fair Performance');
+    return getTranslatedText('Needs Improvement');
   }
 }

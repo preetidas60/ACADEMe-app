@@ -6,6 +6,7 @@ import 'package:ACADEMe/app/auth/auth_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../app/auth/role.dart';
 import '../../app/pages/bottom_nav/bottom_nav.dart';
+import '../../app/pages/homepage/controllers/home_controller.dart';
 import 'forgot_password.dart';
 
 class LogInView extends StatefulWidget {
@@ -23,6 +24,24 @@ class _LogInViewState extends State<LogInView> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRoleLists();
+  }
+
+  /// Fetch admin and teacher email lists on initialization
+  Future<void> _fetchRoleLists() async {
+    try {
+      await Future.wait([
+        AdminRoles.fetchAdminEmails(),
+        TeacherRoles.fetchTeacherEmails(),
+      ]);
+    } catch (e) {
+      debugPrint("Error fetching role lists: $e");
+    }
+  }
 
   /// Shows a snackbar message
   void _showSnackBar(String message) {
@@ -53,47 +72,87 @@ class _LogInViewState extends State<LogInView> {
       if (!mounted) {
         return; // Ensure widget is still active before using context
       }
+
       if (errorMessage != null) {
-        _showSnackBar(errorMessage);
+        String userFriendlyMessage = _getUserFriendlyErrorMessage(errorMessage);
+        _showSnackBar(userFriendlyMessage);
         return;
       }
 
       if (user != null) {
-        // Store user info
-        await _secureStorage.write(key: "user_id", value: user.id);
-        await _secureStorage.write(key: "user_name", value: user.name);
-        await _secureStorage.write(key: "user_email", value: user.email);
-        await _secureStorage.write(
-            key: "student_class", value: user.studentClass);
-        await _secureStorage.write(key: "photo_url", value: user.photoUrl);
-
         // Store credentials
         await _secureStorage.write(
             key: 'email', value: _emailController.text.trim());
         await _secureStorage.write(
             key: 'password', value: _passwordController.text.trim());
 
+        // Force refresh HomeController user details
+        final homeController = HomeController();
+        await homeController.forceRefreshUserDetails();
+
         if (mounted) {
           _showSnackBar(L10n.getTranslatedText(context, '✅ Login successful!'));
         }
 
-        // Fetch user role
-        await UserRoleManager().fetchUserRole(user.email);
-        bool isAdmin = UserRoleManager().isAdmin;
+        // **CRITICAL FIX: Fetch roles AFTER successful login**
+        try {
+          // First fetch the role lists from API
+          debugPrint("Fetching role lists for user: ${user.email}");
+          await Future.wait([
+            AdminRoles.fetchAdminEmails(),
+            TeacherRoles.fetchTeacherEmails(),
+          ]).timeout(const Duration(seconds: 15));
 
-        if (!mounted) return; // Ensure the widget is still active
+          // Then determine user role
+          final roleManager = UserRoleManager();
+          await roleManager.fetchUserRole(user.email);
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => BottomNav(isAdmin: isAdmin),
-          ),
-        );
+          // Get the updated role values
+          bool isAdmin = roleManager.isAdmin;
+          bool isTeacher = roleManager.isTeacher;
+
+          debugPrint(
+              "Login - Role determined: Admin=$isAdmin, Teacher=$isTeacher");
+
+          if (!mounted) return;
+
+          // Navigate to appropriate bottom nav based on role
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BottomNav(
+                isAdmin: isAdmin,
+                isTeacher: isTeacher,
+              ),
+            ),
+          );
+        } catch (roleError) {
+          debugPrint("Error fetching roles: $roleError");
+          // Fallback to default navigation if role fetch fails
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => BottomNav(
+                  isAdmin: false,
+                  isTeacher: false,
+                ),
+              ),
+            );
+          }
+        }
       } else {
         if (mounted) {
           _showSnackBar(L10n.getTranslatedText(
               context, '❌ Login failed. Please try again.'));
         }
+      }
+    } catch (e) {
+      debugPrint("Login error: $e");
+      // Catch any unexpected errors and show user-friendly message
+      if (mounted) {
+        String userFriendlyMessage = _getUserFriendlyErrorMessage(e.toString());
+        _showSnackBar(userFriendlyMessage);
       }
     } finally {
       if (mounted) {
@@ -102,13 +161,78 @@ class _LogInViewState extends State<LogInView> {
     }
   }
 
+  String _getUserFriendlyErrorMessage(String originalError) {
+    // Convert to lowercase for easier matching
+    String lowerError = originalError.toLowerCase();
+
+    // Network connection errors
+    if (lowerError.contains('clientexception') ||
+        lowerError.contains('hostname') ||
+        lowerError.contains('lookup') ||
+        lowerError.contains('network') ||
+        lowerError.contains('connection') ||
+        lowerError.contains('timeout') ||
+        lowerError.contains('socket') ||
+        lowerError.contains('handshake')) {
+      return L10n.getTranslatedText(
+          context, '🌐 Please check your internet connection and try again');
+    }
+
+    // Server errors
+    if (lowerError.contains('server') ||
+        lowerError.contains('500') ||
+        lowerError.contains('502') ||
+        lowerError.contains('503')) {
+      return L10n.getTranslatedText(context,
+          '⚠️ Server is temporarily unavailable. Please try again later');
+    }
+
+    // Authentication errors
+    if (lowerError.contains('invalid') ||
+        lowerError.contains('incorrect') ||
+        lowerError.contains('wrong') ||
+        lowerError.contains('unauthorized') ||
+        lowerError.contains('401')) {
+      return L10n.getTranslatedText(context,
+          '❌ Invalid email or password. Please check your credentials');
+    }
+
+    // User not found
+    if (lowerError.contains('not found') ||
+        lowerError.contains('404') ||
+        lowerError.contains('user does not exist')) {
+      return L10n.getTranslatedText(
+          context, '👤 Account not found. Please sign up first');
+    }
+
+    // Account issues
+    if (lowerError.contains('blocked') ||
+        lowerError.contains('suspended') ||
+        lowerError.contains('disabled')) {
+      return L10n.getTranslatedText(
+          context, '🚫 Account is temporarily disabled. Contact support');
+    }
+
+    // Rate limiting
+    if (lowerError.contains('too many') ||
+        lowerError.contains('rate') ||
+        lowerError.contains('limit')) {
+      return L10n.getTranslatedText(
+          context, '⏰ Too many attempts. Please wait a moment and try again');
+    }
+
+    // Default fallback for any other error
+    return L10n.getTranslatedText(
+        context, '❌ Something went wrong. Please try again');
+  }
+
   /// Handles Google Sign-In
   Future<void> _signInWithGoogle() async {
     setState(() => _isGoogleLoading = true);
 
     try {
       _showSnackBar(L10n.getTranslatedText(context,
-          'Google Sign-In is turned off for now. Please log in manually.'));
+          'Google Sign-In is turned off for now. Please log in manually'));
     } finally {
       if (mounted) {
         setState(() => _isGoogleLoading = false);

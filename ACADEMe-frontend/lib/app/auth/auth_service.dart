@@ -8,8 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../api_endpoints.dart';
 import '../pages/homepage/controllers/home_controller.dart';
+import '../pages/profile/controllers/profile_controller.dart';
 import '../pages/topics/controllers/topic_cache_controller.dart' as topic;
 import '../pages/courses/models/course_model.dart';
+import './role.dart';
 
 class AppUser {
   final String id;
@@ -32,7 +34,8 @@ class AppUser {
       email: json["email"] ?? "",
       name: json["name"] ?? "",
       studentClass: json["student_class"] ?? "SELECT",
-      photoUrl: json["photo_url"] ?? "https://www.w3schools.com/w3images/avatar2.png",
+      photoUrl:
+          json["photo_url"] ?? "https://www.w3schools.com/w3images/avatar2.png",
     );
   }
 }
@@ -53,7 +56,10 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        return (true, responseData["message"]?.toString() ?? "OTP sent successfully");
+        return (
+          true,
+          responseData["message"]?.toString() ?? "OTP sent successfully"
+        );
       } else {
         final errorData = jsonDecode(response.body);
         return (false, errorData["detail"]?.toString() ?? "Failed to send OTP");
@@ -74,18 +80,49 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        return (true, responseData["message"]?.toString() ?? "Reset OTP sent successfully");
+        return (
+          true,
+          responseData["message"]?.toString() ?? "Reset OTP sent successfully"
+        );
       } else {
         final errorData = jsonDecode(response.body);
-        return (false, errorData["detail"]?.toString() ?? "Failed to send reset OTP");
+        return (
+          false,
+          errorData["detail"]?.toString() ?? "Failed to send reset OTP"
+        );
       }
     } catch (e) {
       return (false, "An unexpected error occurred: $e");
     }
   }
 
+  Future<bool> isTokenValid() async {
+    try {
+      String? token = await getAccessToken();
+      if (token == null || token.isEmpty) {
+        return false;
+      }
+
+      // Test the token by making a request to user details
+      final response = await http.get(
+        ApiEndpoints.getUri(ApiEndpoints.userDetails),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      // Token is valid if we get a successful response
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint("Token validation failed: $e");
+      return false;
+    }
+  }
+
   /// ✅ Reset password with OTP verification
-  Future<(bool, String?)> resetPasswordWithOTP(String email, String otp, String newPassword) async {
+  Future<(bool, String?)> resetPasswordWithOTP(
+      String email, String otp, String newPassword) async {
     try {
       final response = await http.post(
         ApiEndpoints.getUri(ApiEndpoints.resetPassword),
@@ -99,10 +136,16 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        return (true, responseData["message"]?.toString() ?? "Password reset successfully");
+        return (
+          true,
+          responseData["message"]?.toString() ?? "Password reset successfully"
+        );
       } else {
         final errorData = jsonDecode(response.body);
-        return (false, errorData["detail"]?.toString() ?? "Failed to reset password");
+        return (
+          false,
+          errorData["detail"]?.toString() ?? "Failed to reset password"
+        );
       }
     } catch (e) {
       return (false, "An unexpected error occurred: $e");
@@ -140,7 +183,8 @@ class AuthService {
         final String userName = responseData["name"] ?? "";
         final String userEmail = responseData["email"] ?? "";
         final String userClass = responseData["student_class"] ?? "SELECT";
-        final String userPhotoUrl = responseData["photo_url"] ?? "https://www.w3schools.com/w3images/avatar2.png";
+        final String userPhotoUrl = responseData["photo_url"] ??
+            "https://www.w3schools.com/w3images/avatar2.png";
 
         await _secureStorage.write(key: "user_id", value: userId);
         await _secureStorage.write(key: "user_name", value: userName);
@@ -161,11 +205,12 @@ class AuthService {
   }
 
   /// ✅ Sign up user via backend WITHOUT OTP (for Google Sign-In)
-  Future<(AppUser?, String?)> signUpWithoutOTP(String email, String password, String name,
-      String studentClass, String photoUrl) async {
+  Future<(AppUser?, String?)> signUpWithoutOTP(String email, String password,
+      String name, String studentClass, String photoUrl) async {
     try {
       // Create user in Firebase Auth first for Google Sign-In
-      final firebase_auth.UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      final firebase_auth.UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -265,14 +310,14 @@ class AuthService {
 
         // ✅ Return the AppUser object
         return (
-        AppUser(
-          id: userId.isNotEmpty ? userId : "N/A",
-          name: name,
-          email: userEmail,
-          studentClass: studentClass,
-          photoUrl: photoUrl,
-        ),
-        null
+          AppUser(
+            id: userId.isNotEmpty ? userId : "N/A",
+            name: name,
+            email: userEmail,
+            studentClass: studentClass,
+            photoUrl: photoUrl,
+          ),
+          null
         );
       } else {
         final errorData = jsonDecode(response.body);
@@ -289,20 +334,24 @@ class AuthService {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return (null, '❌ Google Sign-In canceled');
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final firebase_auth.AuthCredential credential = firebase_auth.GoogleAuthProvider.credential(
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final firebase_auth.AuthCredential credential =
+          firebase_auth.GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      final firebase_auth.UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final firebase_auth.UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
       final firebase_auth.User? firebaseUser = userCredential.user;
 
       if (firebaseUser == null) return (null, '❌ Google authentication failed');
 
       final String email = firebaseUser.email ?? "";
       final String name = firebaseUser.displayName ?? "Google User";
-      final String photoUrl = firebaseUser.photoURL ?? "https://www.w3schools.com/w3images/avatar2.png";
+      final String photoUrl = firebaseUser.photoURL ??
+          "https://www.w3schools.com/w3images/avatar2.png";
 
       if (email.isEmpty) {
         return (null, '❌ Google authentication failed: Email not found');
@@ -316,12 +365,14 @@ class AuthService {
 
       if (!userExists) {
         // ✅ Register user using backend WITHOUT OTP
-        final (_, String? signupError) = await signUpWithoutOTP(email, defaultPassword, name, defaultClass, photoUrl);
+        final (_, String? signupError) = await signUpWithoutOTP(
+            email, defaultPassword, name, defaultClass, photoUrl);
         if (signupError != null) return (null, "❌ Signup failed: $signupError");
       }
 
       // ✅ Log in the user using backend
-      final (AppUser? user, String? loginError) = await signIn(email, defaultPassword);
+      final (AppUser? user, String? loginError) =
+          await signIn(email, defaultPassword);
       if (loginError != null) return (null, "❌ Login failed: $loginError");
 
       return (user, null);
@@ -349,12 +400,11 @@ class AuthService {
     }
   }
 
-  /// ✅ Logout user and clear stored access token
   Future<void> signOut() async {
     try {
       debugPrint("🔄 Starting complete logout process...");
 
-      // 1. Sign out from Firebase & Google
+      // 1. Sign out from Firebase & Google (with individual error handling)
       try {
         await _auth.signOut();
         debugPrint("✅ Firebase Auth signed out");
@@ -369,45 +419,87 @@ class AuthService {
         debugPrint("⚠️ Google signout error: $e");
       }
 
-      // 2. Clear home controller cache first
-      // try {
-      //   final homeController = HomeCourseDataCache();
-      //   homeController.clearCache();
-      //   final homeControllerInstance = HomeController();
-      //   homeControllerInstance.clearUserCache();
-      //   debugPrint("✅ HomeController cache cleared");
-      // } catch (e) {
-      //   debugPrint("⚠️ HomeController clear error: $e");
-      // }
+      // 2. Clear role data FIRST before other cleanup
+      try {
+        final roleManager = UserRoleManager();
+        await roleManager.clearRole();
 
-      // 3. Clear ALL FlutterSecureStorage data
+        // Force clear role lists
+        AdminRoles.adminEmails.clear();
+        TeacherRoles.teacherEmails.clear();
+        AdminRoles.lastFetched = null;
+        TeacherRoles.lastFetched = null;
+
+        debugPrint("✅ User roles cleared");
+      } catch (e) {
+        debugPrint("⚠️ Role clear error: $e");
+      }
+
+      // 3. Clear FlutterSecureStorage with retry mechanism
       try {
         await _secureStorage.deleteAll();
         debugPrint("✅ FlutterSecureStorage cleared");
       } catch (e) {
-        debugPrint("⚠️ SecureStorage clear error: $e");
-        // Try to clear individual known keys if deleteAll fails
+        debugPrint(
+            "⚠️ SecureStorage deleteAll error: $e, trying individual deletion");
+        // Try to clear individual keys if deleteAll fails
         try {
-          final allKeys = await _secureStorage.readAll();
-          for (String key in allKeys.keys) {
+          final keys = [
+            'access_token',
+            'user_id',
+            'user_name',
+            'user_email',
+            'student_class',
+            'photo_url',
+            'email',
+            'password'
+          ];
+          for (String key in keys) {
             await _secureStorage.delete(key: key);
           }
           debugPrint("✅ FlutterSecureStorage cleared individually");
         } catch (e2) {
-          debugPrint("❌ Failed to clear SecureStorage: $e2");
+          debugPrint("❌ Failed to clear SecureStorage completely: $e2");
         }
       }
 
-      // 4. Clear ALL SharedPreferences data
+      // 4. Clear SharedPreferences with specific keys
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        debugPrint("✅ SharedPreferences cleared");
+
+        // Clear authentication-related keys
+        final authKeys = [
+          'isAdmin',
+          'isTeacher',
+          'userRole',
+          'cached_admin_emails',
+          'cached_teacher_emails',
+          'user_role',
+          'is_admin',
+          'is_teacher'
+        ];
+
+        for (String key in authKeys) {
+          await prefs.remove(key);
+        }
+
+        debugPrint("✅ Authentication SharedPreferences cleared");
       } catch (e) {
         debugPrint("⚠️ SharedPreferences clear error: $e");
       }
 
-      // 5. Clear all application caches
+      // 5. Clear application caches
+      try {
+        // Clear home controller cache if available
+        final homeController = HomeController();
+        homeController.clearCache();
+        homeController.clearUserCache();
+        debugPrint("✅ HomeController cache cleared");
+      } catch (e) {
+        debugPrint("⚠️ HomeController clear error: $e");
+      }
+
+      // Clear other caches
       try {
         CourseDataCache().clearCache();
         debugPrint("✅ CourseDataCache cleared");
@@ -422,9 +514,15 @@ class AuthService {
         debugPrint("⚠️ TopicCacheController clear error: $e");
       }
 
-      // 6. Clear additional Flutter caches (if needed)
       try {
-        // Clear image cache
+        ProfileController.clearCache();
+        debugPrint("✅ ProfileController cache cleared");
+      } catch (e) {
+        debugPrint("⚠️ ProfileController clear error: $e");
+      }
+
+      // 6. Clear Flutter image cache
+      try {
         PaintingBinding.instance.imageCache.clear();
         PaintingBinding.instance.imageCache.clearLiveImages();
         debugPrint("✅ Image cache cleared");
@@ -432,45 +530,15 @@ class AuthService {
         debugPrint("⚠️ Image cache clear error: $e");
       }
 
-      // 7. Clear any Provider/State Management data
-      try {
-        // If you're using Provider, clear any cached providers here
-        // Example: Provider.of<UserProvider>(context, listen: false).clearData();
-        // Add your specific provider clear methods here
-        debugPrint("✅ Provider data cleared");
-      } catch (e) {
-        debugPrint("⚠️ Provider clear error: $e");
-      }
-
-      // 8. Clear temporary directory cache (optional)
-      try {
-        final tempDir = await getTemporaryDirectory();
-        if (tempDir.existsSync()) {
-          await tempDir.delete(recursive: true);
-          debugPrint("✅ Temporary directory cleared");
-        }
-      } catch (e) {
-        debugPrint("⚠️ Temp directory clear error: $e");
-      }
-
-      // 9. Clear application documents directory cache (use with caution)
-      try {
-        final appDocDir = await getApplicationDocumentsDirectory();
-        final cacheFiles = appDocDir.listSync();
-        for (var file in cacheFiles) {
-          if (file.path.contains('cache') || file.path.contains('temp')) {
-            await file.delete(recursive: true);
-          }
-        }
-        debugPrint("✅ App documents cache cleared");
-      } catch (e) {
-        debugPrint("⚠️ App documents clear error: $e");
-      }
-
-      debugPrint("🎉 Complete logout process finished successfully");
-
+      debugPrint("🎉 Complete logout process finished");
     } catch (e) {
       debugPrint("❌ Critical logout error: $e");
+      // Even if logout fails, clear what we can
+      try {
+        await _secureStorage.deleteAll();
+      } catch (e2) {
+        debugPrint("❌ Final cleanup failed: $e2");
+      }
       throw Exception("Logout failed: $e");
     }
   }
@@ -482,8 +550,26 @@ class AuthService {
 
   /// ✅ Check if user is logged in
   Future<bool> isUserLoggedIn() async {
-    String? token = await getAccessToken();
-    return token != null && token.isNotEmpty;
+    try {
+      String? token = await getAccessToken();
+      if (token == null || token.isEmpty) {
+        debugPrint("No access token found");
+        return false;
+      }
+
+      // CRITICAL: Validate token with backend
+      bool isValid = await isTokenValid();
+      if (!isValid) {
+        debugPrint("Token is invalid or expired, clearing auth data");
+        await signOut();
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint("Error checking login status: $e");
+      return false;
+    }
   }
 
   /// ✅ Send password reset email (Firebase method - kept for compatibility)
@@ -498,7 +584,10 @@ class AuthService {
   /// ✅ Fetch user details from backend
   Future<Map<String, dynamic>?> getUserDetails() async {
     String? token = await getAccessToken();
-    if (token == null || token.isEmpty) return null;
+    if (token == null || token.isEmpty) {
+      debugPrint("No access token available for getUserDetails");
+      return null;
+    }
 
     try {
       final response = await http.get(
@@ -507,14 +596,20 @@ class AuthService {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      } else if (response.statusCode == 401) {
+        debugPrint("Token expired (401), clearing auth data");
+        await signOut();
+        return null;
       } else {
+        debugPrint("getUserDetails failed with status: ${response.statusCode}");
         return null;
       }
     } catch (e) {
+      debugPrint("Error in getUserDetails: $e");
       return null;
     }
   }
@@ -525,7 +620,8 @@ class AuthService {
       final String? userId = await _secureStorage.read(key: "user_id");
       final String? email = await _secureStorage.read(key: "user_email");
       final String? name = await _secureStorage.read(key: "user_name");
-      final String? studentClass = await _secureStorage.read(key: "student_class");
+      final String? studentClass =
+          await _secureStorage.read(key: "student_class");
       final String? photoUrl = await _secureStorage.read(key: "photo_url");
 
       if (userId != null && email != null) {
@@ -534,7 +630,8 @@ class AuthService {
           email: email,
           name: name ?? "Unknown",
           studentClass: studentClass ?? "SELECT",
-          photoUrl: photoUrl ?? "https://www.w3schools.com/w3images/avatar2.png",
+          photoUrl:
+              photoUrl ?? "https://www.w3schools.com/w3images/avatar2.png",
         );
       }
       return null;

@@ -16,7 +16,6 @@ class CourseListScreen extends StatefulWidget {
 
 class CourseListScreenState extends State<CourseListScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-
   late TabController _tabController;
   final AutoSizeGroup _tabTextGroup = AutoSizeGroup();
 
@@ -75,6 +74,11 @@ class CourseListScreenState extends State<CourseListScreen>
                   tabController: _tabController,
                   tabTextGroup: _tabTextGroup,
                 ),
+                if (controller.isRefreshing)
+                  const LinearProgressIndicator(
+                    backgroundColor: Colors.grey,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                  ),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
@@ -85,7 +89,8 @@ class CourseListScreenState extends State<CourseListScreen>
                         isLoading: controller.isLoading,
                         hasInitialized: controller.hasInitialized,
                         onRefresh: _refreshCourses,
-                        emptyMessage: L10n.getTranslatedText(context, 'No courses available'),
+                        emptyMessage: L10n.getTranslatedText(
+                            context, 'No courses available'),
                         getModuleProgressText: controller.getModuleProgressText,
                       ),
                       // Ongoing Courses Tab
@@ -94,7 +99,8 @@ class CourseListScreenState extends State<CourseListScreen>
                         isLoading: controller.isLoading,
                         hasInitialized: controller.hasInitialized,
                         onRefresh: _refreshCourses,
-                        emptyMessage: L10n.getTranslatedText(context, 'No ongoing courses'),
+                        emptyMessage: L10n.getTranslatedText(
+                            context, 'No ongoing courses'),
                         getModuleProgressText: controller.getModuleProgressText,
                       ),
                       // Completed Courses Tab
@@ -103,7 +109,8 @@ class CourseListScreenState extends State<CourseListScreen>
                         isLoading: controller.isLoading,
                         hasInitialized: controller.hasInitialized,
                         onRefresh: _refreshCourses,
-                        emptyMessage: L10n.getTranslatedText(context, 'No completed courses'),
+                        emptyMessage: L10n.getTranslatedText(
+                            context, 'No completed courses'),
                         getModuleProgressText: controller.getModuleProgressText,
                       ),
                     ],

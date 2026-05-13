@@ -1,3 +1,4 @@
+import 'package:ACADEMe/localization/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/flash_card_controller.dart';
@@ -15,7 +16,6 @@ class FlashCardScreen extends StatefulWidget {
 
 class _FlashCardScreenState extends State<FlashCardScreen>
     with TickerProviderStateMixin {
-
   @override
   void initState() {
     super.initState();
@@ -46,7 +46,7 @@ class _FlashCardScreenState extends State<FlashCardScreen>
                 onPressed: () => Navigator.pop(context),
               ),
               title: Text(
-                'Subtopic Materials',
+                L10n.getTranslatedText(context, 'Subtopic Materials'),
                 style: TextStyle(
                     color: Colors.black,
                     fontWeight: FontWeight.bold,

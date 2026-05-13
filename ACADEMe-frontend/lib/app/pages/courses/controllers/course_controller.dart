@@ -15,15 +15,18 @@ class CourseController extends ChangeNotifier {
 
   List<Course> _courses = [];
   bool _isLoading = false;
+  bool _isRefreshing = false;
   bool _hasInitialized = false;
   static bool _hasEverFetched = false;
 
   List<Course> get courses => _courses;
   bool get isLoading => _isLoading;
+  bool get isRefreshing => _isRefreshing;
   bool get hasInitialized => _hasInitialized;
 
-  List<Course> get ongoingCourses =>
-      _courses.where((course) => course.progress < 1.0).toList();
+  List<Course> get ongoingCourses => _courses
+      .where((course) => course.progress < 1.0 && course.progress > 0.0)
+      .toList();
   List<Course> get completedCourses =>
       _courses.where((course) => course.progress >= 1.0).toList();
 
@@ -194,7 +197,15 @@ class CourseController extends ChangeNotifier {
 
   // Method to manually refresh data
   Future<void> refreshCourses(BuildContext context) async {
-    await fetchCourses(context, forceRefresh: true);
+    _isRefreshing = true;
+    notifyListeners();
+
+    try {
+      await fetchCourses(context, forceRefresh: true);
+    } finally {
+      _isRefreshing = false;
+      notifyListeners();
+    }
   }
 
   Future<void> selectCourse(String courseId) async {
