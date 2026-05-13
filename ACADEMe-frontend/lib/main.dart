@@ -1,7 +1,10 @@
 import 'package:ACADEMe/started/pages/animated_splash.dart';
 import 'package:ACADEMe/home/pages/bottomNav.dart';
 import 'package:ACADEMe/started/pages/course.dart';
+import 'package:ACADEMe/localization/l10n.dart';
+import 'package:ACADEMe/localization/language_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'dart:io';
 import 'home/auth/role.dart';
@@ -13,6 +16,9 @@ import 'academe_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,17 +31,28 @@ void main() async {
   } catch (e) {
     print("❌ Firebase Initialization Error: $e");
   }
+  final prefs = await SharedPreferences.getInstance();
+  String? userEmail = prefs.getString("user_email");
 
-  await UserRoleManager().fetchUserRole(); // Fetch role on app start
-  await UserRoleManager().loadRole();
+  if (userEmail != null) {
+    await UserRoleManager().fetchUserRole(userEmail);
+  }
+
+
+  // Fetch role on app start
 
   await SystemChrome.setPreferredOrientations(<DeviceOrientation>[
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown
-  ]).then((_) => runApp(MyApp()));
+  ]).then((_) {
+    runApp(
+      ChangeNotifierProvider(
+        create: (context) => LanguageProvider(), // Provide LanguageProvider globally
+        child: const MyApp(),
+      ),
+    );
+  });
 }
-
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -46,23 +63,39 @@ class MyApp extends StatelessWidget {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness:
-          !kIsWeb && Platform.isAndroid ? Brightness.dark : Brightness.light,
+      !kIsWeb && Platform.isAndroid ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: Colors.white,
       systemNavigationBarDividerColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
     ));
-    return MaterialApp(
-      title: 'ACADEMe',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        textTheme: AcademeTheme.textTheme,
-        platform: TargetPlatform.iOS,
-      ),
-      home: AnimatedSplashScreen(),
-      routes: {
-        '/home': (context) => BottomNav(isAdmin: UserRoleManager().isAdmin,),
-        '/courses' : (context) => SelectCourseScreen()
+
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, child) {
+        return MaterialApp(
+          title: 'ACADEMe',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            textTheme: AcademeTheme.textTheme,
+            platform: TargetPlatform.iOS,
+          ),
+          locale: languageProvider.locale, // Get locale from provider
+          supportedLocales: L10n.supportedLocales,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            AppLocalizations.delegate,
+          ],
+          localeResolutionCallback: (locale, _) {
+            return L10n.getSupportedLocale(locale);
+          },
+          home: AnimatedSplashScreen(),
+          routes: {
+            '/home': (context) => BottomNav(isAdmin: UserRoleManager().isAdmin),
+            '/courses': (context) => SelectCourseScreen(),
+          },
+        );
       },
     );
   }
