@@ -19,9 +19,17 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: "assets/.env");
+    print("✅ .env Loaded Successfully");
+  } catch (e) {
+    print("❌ .env Load Error: $e");
+  }
 
   try {
     await Firebase.initializeApp(
@@ -37,6 +45,8 @@ void main() async {
   if (userEmail != null) {
     await UserRoleManager().fetchUserRole(userEmail);
   }
+
+  await UserRoleManager().loadRole();
 
 
   // Fetch role on app start

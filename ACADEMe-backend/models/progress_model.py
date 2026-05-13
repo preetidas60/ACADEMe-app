@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict
 from datetime import datetime
+from typing import Optional, Dict
+from pydantic import BaseModel, Field
 
 class ProgressBase(BaseModel):
+    course_id: Optional[str] = None
     topic_id: Optional[str] = None
     subtopic_id: Optional[str] = None
     material_id: Optional[str] = None

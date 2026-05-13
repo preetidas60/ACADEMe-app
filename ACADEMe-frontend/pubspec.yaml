@@ -58,6 +58,7 @@ dependencies:
   smooth_page_indicator: ^1.2.1
   provider: ^6.1.2
   shared_preferences: ^2.5.2
+  flutter_dotenv: ^5.2.1
   flutter_localizations:
     sdk: flutter
 
@@ -88,6 +89,7 @@ flutter:
     - assets/academe/
     - assets/icons/
     - assets/l10n/
+    - assets/.env
 
   # An image asset can refer to one or more resolution-specific "variants"
   # For details regarding adding assets from package dependencies, see
